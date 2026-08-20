@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xbudget/core/utils/parsed_transaction.dart';
 import 'package:xbudget/core/utils/transaction_categorizer.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 
 void main() {
   group('TransactionCategorizer Tests', () {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 
 class CategoryUiHelper {
   static IconData getIcon(BudgetCategory cat) {

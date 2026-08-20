@@ -1,4 +1,4 @@
-import '../../domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 import 'parsed_transaction.dart';
 
 /// Intelligent category mapper that assigns [BudgetCategory] to transactions

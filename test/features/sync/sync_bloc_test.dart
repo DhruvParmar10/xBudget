@@ -2,10 +2,10 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/di/injection_container.dart';
-import 'package:xbudget/domain/repositories/transaction_repository.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_bloc.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_event.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_state.dart';
+import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 
 void main() {
   setUp(() async {

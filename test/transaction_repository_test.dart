@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
-import 'package:xbudget/data/datasources/transaction_local_datasource.dart';
-import 'package:xbudget/data/models/transaction_model.dart';
-import 'package:xbudget/data/repositories/transaction_repository_impl.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
-import 'package:xbudget/domain/entities/transaction_entity.dart';
-import 'package:xbudget/domain/repositories/transaction_repository.dart';
+import 'package:xbudget/features/transactions/data/datasources/transaction_local_datasource.dart';
+import 'package:xbudget/features/transactions/data/models/transaction_model.dart';
+import 'package:xbudget/features/transactions/data/repositories/transaction_repository_impl.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 
 void main() {
   group('TransactionRepository & LocalDataSource Tests', () {

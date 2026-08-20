@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
-import 'package:xbudget/domain/entities/transaction_entity.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/transaction_entity.dart';
 
 abstract class TransactionState extends Equatable {
   const TransactionState();

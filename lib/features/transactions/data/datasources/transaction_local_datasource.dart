@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 import '../models/transaction_model.dart';
 
 /// Local data source interface for storing and retrieving transactions.

@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:xbudget/core/usecases/usecase.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
-import 'package:xbudget/domain/repositories/transaction_repository.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 
 class SaveCategoryRuleParams extends Equatable {
   final String keyword;

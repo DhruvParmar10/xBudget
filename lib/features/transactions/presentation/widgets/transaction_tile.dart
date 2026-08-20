@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:xbudget/domain/entities/transaction_entity.dart';
+import 'package:xbudget/features/transactions/domain/entities/transaction_entity.dart';
 import 'category_ui_helper.dart';
 import 'transaction_details_bottom_sheet.dart';
 

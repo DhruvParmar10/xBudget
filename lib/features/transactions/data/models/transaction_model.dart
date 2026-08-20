@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import '../../core/utils/parsed_transaction.dart';
-import '../../domain/entities/budget_category.dart';
-import '../../domain/entities/transaction_entity.dart';
+import 'package:xbudget/core/utils/parsed_transaction.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/transaction_entity.dart';
 
 /// Data model for [TransactionEntity] with JSON serialization and deterministic ID generation.
 class TransactionModel extends TransactionEntity {

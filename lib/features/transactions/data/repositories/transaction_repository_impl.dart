@@ -1,6 +1,6 @@
-import '../../domain/entities/budget_category.dart';
-import '../../domain/entities/transaction_entity.dart';
-import '../../domain/repositories/transaction_repository.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 import '../datasources/transaction_local_datasource.dart';
 import '../models/transaction_model.dart';
 

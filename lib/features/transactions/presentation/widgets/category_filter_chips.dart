@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_event.dart';
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_state.dart';

@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:xbudget/core/usecases/usecase.dart';
-import 'package:xbudget/domain/repositories/transaction_repository.dart';
+import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 
 class DeleteTransactionParams extends Equatable {
   final String id;

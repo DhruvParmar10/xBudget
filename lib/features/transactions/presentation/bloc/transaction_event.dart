@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:xbudget/domain/entities/budget_category.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 
 abstract class TransactionEvent extends Equatable {
   const TransactionEvent();
