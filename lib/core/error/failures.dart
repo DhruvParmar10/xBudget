@@ -20,3 +20,11 @@ class SmsFailure extends Failure {
 class SyncFailure extends Failure {
   const SyncFailure([super.message = 'SMS synchronization failed']);
 }
+
+class GoogleAuthFailure extends Failure {
+  const GoogleAuthFailure([super.message = 'Google authentication failed']);
+}
+
+class GoogleSheetsFailure extends Failure {
+  const GoogleSheetsFailure([super.message = 'Google Sheets operation failed']);
+}

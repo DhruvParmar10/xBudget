@@ -4,6 +4,7 @@ import 'core/di/injection_container.dart';
 import 'core/theme/app_theme.dart';
 import 'features/balance/presentation/bloc/balance_bloc.dart';
 import 'features/home/presentation/screens/home_screen.dart';
+import 'features/sync/presentation/bloc/google_sheets_bloc.dart';
 import 'features/sync/presentation/bloc/sync_bloc.dart';
 import 'features/transactions/presentation/bloc/transaction_bloc.dart';
 
@@ -18,12 +19,14 @@ class MyApp extends StatelessWidget {
   final TransactionBloc? transactionBloc;
   final BalanceBloc? balanceBloc;
   final SyncBloc? syncBloc;
+  final GoogleSheetsBloc? googleSheetsBloc;
 
   const MyApp({
     super.key,
     this.transactionBloc,
     this.balanceBloc,
     this.syncBloc,
+    this.googleSheetsBloc,
   });
 
   @override
@@ -38,6 +41,9 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider<SyncBloc>(
           create: (_) => syncBloc ?? sl<SyncBloc>(),
+        ),
+        BlocProvider<GoogleSheetsBloc>(
+          create: (_) => googleSheetsBloc ?? sl<GoogleSheetsBloc>(),
         ),
       ],
       child: MaterialApp(

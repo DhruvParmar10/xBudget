@@ -1,14 +1,18 @@
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
+import 'package:xbudget/core/services/google_sheets_service.dart';
 import 'package:xbudget/core/services/sms_sync_service.dart';
 import 'package:xbudget/features/balance/domain/usecases/clear_balance_usecase.dart';
 import 'package:xbudget/features/balance/domain/usecases/get_balance_usecase.dart';
 import 'package:xbudget/features/balance/domain/usecases/set_balance_usecase.dart';
 import 'package:xbudget/features/balance/presentation/bloc/balance_bloc.dart';
 import 'package:xbudget/features/sync/domain/usecases/clear_all_data_usecase.dart';
+import 'package:xbudget/features/sync/domain/usecases/google_auth_usecases.dart';
 import 'package:xbudget/features/sync/domain/usecases/inject_sample_sms_usecase.dart';
 import 'package:xbudget/features/sync/domain/usecases/sync_sms_usecase.dart';
+import 'package:xbudget/features/sync/domain/usecases/sync_to_google_sheets_usecase.dart';
+import 'package:xbudget/features/sync/presentation/bloc/google_sheets_bloc.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_bloc.dart';
 import 'package:xbudget/features/transactions/data/datasources/transaction_local_datasource.dart';
 import 'package:xbudget/features/transactions/data/repositories/transaction_repository_impl.dart';
@@ -58,6 +62,12 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
     ),
   );
 
+  sl.registerLazySingleton<GoogleSheetsService>(
+    () => GoogleSheetsService(
+      initialSpreadsheetId: sl<AppPreferences>().googleSheetId,
+    ),
+  );
+
   // ---------------------------------------------------------------------------
   // Use Cases - Transactions
   // ---------------------------------------------------------------------------
@@ -78,12 +88,37 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
   sl.registerLazySingleton(() => ClearBalanceUseCase(sl()));
 
   // ---------------------------------------------------------------------------
-  // Use Cases - Sync
+  // Use Cases - Sync & Google Sheets
   // ---------------------------------------------------------------------------
   sl.registerLazySingleton(() => SyncSmsUseCase(sl()));
   sl.registerLazySingleton(() => InjectSampleSmsUseCase(sl()));
   sl.registerLazySingleton(
     () => ClearAllDataUseCase(preferences: sl(), repository: sl()),
+  );
+  sl.registerLazySingleton(
+    () => SignInGoogleUseCase(
+      googleSheetsService: sl(),
+      preferences: sl(),
+    ),
+  );
+  sl.registerLazySingleton(
+    () => SignOutGoogleUseCase(
+      googleSheetsService: sl(),
+      preferences: sl(),
+    ),
+  );
+  sl.registerLazySingleton(
+    () => GetGoogleAuthStatusUseCase(
+      googleSheetsService: sl(),
+      preferences: sl(),
+    ),
+  );
+  sl.registerLazySingleton(
+    () => SyncToGoogleSheetsUseCase(
+      googleSheetsService: sl(),
+      repository: sl(),
+      preferences: sl(),
+    ),
   );
 
   // ---------------------------------------------------------------------------
@@ -101,7 +136,6 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
     ),
   );
 
-
   sl.registerFactory(
     () => BalanceBloc(
       getBalanceUseCase: sl(),
@@ -115,6 +149,16 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
       syncSmsUseCase: sl(),
       injectSampleSmsUseCase: sl(),
       clearAllDataUseCase: sl(),
+      preferences: sl(),
+    ),
+  );
+
+  sl.registerFactory(
+    () => GoogleSheetsBloc(
+      signInGoogleUseCase: sl(),
+      signOutGoogleUseCase: sl(),
+      getGoogleAuthStatusUseCase: sl(),
+      syncToGoogleSheetsUseCase: sl(),
       preferences: sl(),
     ),
   );

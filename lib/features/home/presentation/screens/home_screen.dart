@@ -12,6 +12,8 @@ import 'package:xbudget/features/home/presentation/widgets/expense_pie_chart.dar
 import 'package:xbudget/features/home/presentation/widgets/home_app_bar.dart';
 import 'package:xbudget/features/home/presentation/widgets/monthly_cycle_settings_bottom_sheet.dart';
 import 'package:xbudget/features/home/presentation/widgets/recent_expenses_section.dart';
+import 'package:xbudget/features/sync/presentation/bloc/google_sheets_bloc.dart';
+import 'package:xbudget/features/sync/presentation/bloc/google_sheets_event.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_bloc.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_event.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_state.dart';
@@ -20,6 +22,7 @@ import 'package:xbudget/features/transactions/presentation/bloc/transaction_bloc
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_event.dart';
 import 'package:xbudget/features/transactions/presentation/widgets/category_filter_chips.dart';
 import 'package:xbudget/features/transactions/presentation/widgets/transaction_list_view.dart';
+import 'package:xbudget/features/home/presentation/widgets/google_sheets_sync_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,6 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<TransactionBloc>().add(const LoadTransactionsEvent());
     // Auto-sync SMS on app launch
     context.read<SyncBloc>().add(const TriggerSmsSyncEvent(isAutoSync: true));
+    // Check Google authentication status
+    context.read<GoogleSheetsBloc>().add(const CheckGoogleSheetsAuthEvent());
   }
 
   void _onNavBarTapped(int index) {
@@ -134,6 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        const SizedBox(height: 16),
+        const GoogleSheetsSyncCard(),
         const SizedBox(height: 16),
         Card(
           color: AppColors.surfaceLight.withValues(alpha: 0.4),

@@ -152,6 +152,56 @@ class AppPreferences {
   }
 
   // ---------------------------------------------------------------------------
+  // GOOGLE SHEETS & DRIVE SYNC
+  // ---------------------------------------------------------------------------
+  static const String _keyGoogleSheetId = 'google_sheet_id';
+  static const String _keyGoogleAccountEmail = 'google_account_email';
+  static const String _keyLastGoogleSheetSyncTimestamp = 'last_google_sheet_sync_timestamp';
+
+  /// Gets the stored Google Spreadsheet ID.
+  String? get googleSheetId => _prefs.getString(_keyGoogleSheetId);
+
+  /// Sets or clears the stored Google Spreadsheet ID.
+  Future<bool> setGoogleSheetId(String? id) async {
+    if (id == null) {
+      return await _prefs.remove(_keyGoogleSheetId);
+    }
+    return await _prefs.setString(_keyGoogleSheetId, id);
+  }
+
+  /// Gets the stored connected Google Account email.
+  String? get googleAccountEmail => _prefs.getString(_keyGoogleAccountEmail);
+
+  /// Sets or clears the stored connected Google Account email.
+  Future<bool> setGoogleAccountEmail(String? email) async {
+    if (email == null) {
+      return await _prefs.remove(_keyGoogleAccountEmail);
+    }
+    return await _prefs.setString(_keyGoogleAccountEmail, email);
+  }
+
+  /// Gets the last date/time the app synced to Google Sheets.
+  DateTime? get lastGoogleSheetSyncTimestamp {
+    final epoch = _prefs.getInt(_keyLastGoogleSheetSyncTimestamp);
+    if (epoch == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(epoch);
+  }
+
+  /// Updates the last Google Sheet sync timestamp.
+  Future<bool> setLastGoogleSheetSyncTimestamp([DateTime? dateTime]) async {
+    final timestamp = (dateTime ?? DateTime.now()).millisecondsSinceEpoch;
+    return await _prefs.setInt(_keyLastGoogleSheetSyncTimestamp, timestamp);
+  }
+
+  /// Clears stored Google Sheets configuration and sync metadata.
+  Future<bool> clearGoogleSheetConfig() async {
+    final r1 = await _prefs.remove(_keyGoogleSheetId);
+    final r2 = await _prefs.remove(_keyGoogleAccountEmail);
+    final r3 = await _prefs.remove(_keyLastGoogleSheetSyncTimestamp);
+    return r1 && r2 && r3;
+  }
+
+  // ---------------------------------------------------------------------------
   // RESET / CLEAR PREFERENCES
   // ---------------------------------------------------------------------------
 

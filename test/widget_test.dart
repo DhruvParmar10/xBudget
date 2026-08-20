@@ -54,6 +54,8 @@ void main() {
     // Tap "Settings" nav item
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    expect(find.text('Google Sheets Sync'), findsOneWidget);
+    expect(find.text('Connect Google Account'), findsOneWidget);
     expect(find.text('Sync SMS Inbox'), findsOneWidget);
 
     // Tap "HOME" nav item
