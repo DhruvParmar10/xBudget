@@ -16,13 +16,50 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify that our app renders the title and balance section
-    expect(find.text('xBudget'), findsOneWidget);
+    expect(find.text('XBUDGET'), findsOneWidget);
     expect(find.text('CURRENT BALANCE'), findsOneWidget);
-    expect(find.text('Monthly Expense'), findsOneWidget);
+    expect(find.text('Monthly Expense'), findsWidgets);
     expect(find.text('Monthly Income'), findsOneWidget);
     expect(find.text('Net Flow'), findsOneWidget);
     expect(find.text('Update'), findsOneWidget);
 
+    // Verify wireframe sections
+    await tester.scrollUntilVisible(
+      find.text('Last 10 Expenses'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Last 10 Expenses'), findsOneWidget);
+
+    // Verify Bottom Navigation Bar items
+    expect(find.text('Expenses'), findsOneWidget);
+    expect(find.text('HOME'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+  });
+
+  testWidgets('xBudget BottomNavigationBar navigates between tabs',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // Tap "Expenses" nav item
+    await tester.tap(find.text('Expenses'));
+    await tester.pumpAndSettle();
+    expect(find.text('All Expenses & Transactions'), findsOneWidget);
+
+    // Tap "Settings" nav item
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sync SMS Inbox'), findsOneWidget);
+
+    // Tap "HOME" nav item
+    await tester.tap(find.text('HOME'));
+    await tester.pumpAndSettle();
+    expect(find.text('CURRENT BALANCE'), findsOneWidget);
   });
 
   testWidgets('xBudget Note Balance modal updates balance correctly',

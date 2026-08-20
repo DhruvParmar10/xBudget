@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xbudget/core/theme/app_colors.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_bloc.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_event.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_state.dart';
@@ -10,37 +11,6 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
-  Future<void> _showClearDataDialog(BuildContext context) async {
-    final syncBloc = context.read<SyncBloc>();
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset Storage?'),
-        content: const Text(
-          'This will clear all transactions, user rules, and the sync timestamp.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reset'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      syncBloc.add(const ResetAllDataEvent());
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SyncBloc, SyncState>(
@@ -48,28 +18,42 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
         final isLoading = state is SyncInProgress;
 
         return AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          centerTitle: true,
           title: const Text(
-            'xBudget',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            'XBUDGET',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              letterSpacing: 4.0,
+              color: AppColors.cream,
+            ),
           ),
           actions: [
             IconButton(
-              tooltip: 'Sync SMS',
-              icon: const Icon(Icons.sync),
+              tooltip: 'Refresh / Sync SMS',
+              icon: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.cream,
+                      ),
+                    )
+                  : const Icon(Icons.refresh, color: AppColors.cream),
               onPressed: isLoading
                   ? null
                   : () {
                       context.read<SyncBloc>().add(const TriggerSmsSyncEvent());
                     },
             ),
-            IconButton(
-              tooltip: 'Clear Data',
-              icon: const Icon(Icons.delete_outline),
-              onPressed: isLoading ? null : () => _showClearDataDialog(context),
-            ),
+            const SizedBox(width: 8),
           ],
         );
       },
     );
   }
 }
+

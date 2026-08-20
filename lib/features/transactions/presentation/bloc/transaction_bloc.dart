@@ -32,12 +32,12 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
 
   DateTime _getStartOfMonth([DateTime? dt]) {
     final now = dt ?? DateTime.now();
-    return DateTime(now.year, now.month, 1);
+    return DateTime(now.year, now.month, 0);
   }
 
   DateTime _getEndOfMonth([DateTime? dt]) {
     final now = dt ?? DateTime.now();
-    return DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
+    return DateTime(now.year, now.month + 1, -1, 23, 59, 59, 999);
   }
 
   Future<void> _onLoadTransactions(

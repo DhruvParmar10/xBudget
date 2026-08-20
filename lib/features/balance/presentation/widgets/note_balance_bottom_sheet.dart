@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xbudget/core/theme/app_colors.dart';
 import '../bloc/balance_bloc.dart';
 import '../bloc/balance_event.dart';
 import '../bloc/balance_state.dart';
@@ -11,6 +12,7 @@ class NoteBalanceBottomSheet extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -76,12 +78,12 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
+                          color: AppColors.primary.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.account_balance_wallet,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          color: AppColors.primary,
                           size: 22,
                         ),
                       ),
@@ -94,18 +96,19 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
+                              color: AppColors.cream,
                             ),
                           ),
                           Text(
                             'Update your day-to-day available funds',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
                           ),
                         ],
                       ),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, color: AppColors.cream),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -118,6 +121,7 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                 style: const TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
+                  color: AppColors.cream,
                 ),
                 decoration: InputDecoration(
                   prefixIcon: const Padding(
@@ -127,23 +131,34 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
+                        color: AppColors.cream,
                       ),
                     ),
                   ),
                   prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
                   hintText: '0.00',
+                  hintStyle: const TextStyle(color: AppColors.onSurfaceVariant),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
                   ),
                   filled: true,
-                  fillColor: Colors.grey.shade50,
+                  fillColor: AppColors.surfaceLight.withValues(alpha: 0.5),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
               ),
               const SizedBox(height: 12),
               const Text(
                 'Quick Adjustments',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
               SingleChildScrollView(
@@ -151,31 +166,46 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                 child: Row(
                   children: [
                     ActionChip(
-                      avatar: const Icon(Icons.add, size: 14, color: Colors.green),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.border),
+                      labelStyle: const TextStyle(color: AppColors.cream),
+                      avatar: const Icon(Icons.add, size: 14, color: AppColors.income),
                       label: const Text('+₹500'),
                       onPressed: () => _applyDelta(500),
                     ),
                     const SizedBox(width: 6),
                     ActionChip(
-                      avatar: const Icon(Icons.add, size: 14, color: Colors.green),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.border),
+                      labelStyle: const TextStyle(color: AppColors.cream),
+                      avatar: const Icon(Icons.add, size: 14, color: AppColors.income),
                       label: const Text('+₹1,000'),
                       onPressed: () => _applyDelta(1000),
                     ),
                     const SizedBox(width: 6),
                     ActionChip(
-                      avatar: const Icon(Icons.add, size: 14, color: Colors.green),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.border),
+                      labelStyle: const TextStyle(color: AppColors.cream),
+                      avatar: const Icon(Icons.add, size: 14, color: AppColors.income),
                       label: const Text('+₹5,000'),
                       onPressed: () => _applyDelta(5000),
                     ),
                     const SizedBox(width: 6),
                     ActionChip(
-                      avatar: const Icon(Icons.remove, size: 14, color: Colors.redAccent),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.border),
+                      labelStyle: const TextStyle(color: AppColors.cream),
+                      avatar: const Icon(Icons.remove, size: 14, color: AppColors.expense),
                       label: const Text('-₹500'),
                       onPressed: () => _applyDelta(-500),
                     ),
                     const SizedBox(width: 6),
                     ActionChip(
-                      avatar: const Icon(Icons.remove, size: 14, color: Colors.redAccent),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.border),
+                      labelStyle: const TextStyle(color: AppColors.cream),
+                      avatar: const Icon(Icons.remove, size: 14, color: AppColors.expense),
                       label: const Text('-₹1,000'),
                       onPressed: () => _applyDelta(-1000),
                     ),
@@ -190,6 +220,8 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                       flex: 1,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.cream,
+                          side: const BorderSide(color: AppColors.border),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -214,6 +246,8 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                     child: FilledButton.icon(
                       icon: const Icon(Icons.check),
                       style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.cream,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -226,6 +260,7 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
                                 UpdateBalanceEvent(
                                   balance: val,
                                   source: 'manual',
+                                  updatedAt: DateTime.now(),
                                 ),
                               );
                           Navigator.pop(context);
@@ -249,3 +284,4 @@ class _NoteBalanceBottomSheetState extends State<NoteBalanceBottomSheet> {
     );
   }
 }
+

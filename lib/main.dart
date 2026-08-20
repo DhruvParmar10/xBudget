@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection_container.dart';
+import 'core/theme/app_theme.dart';
 import 'features/balance/presentation/bloc/balance_bloc.dart';
 import 'features/home/presentation/screens/home_screen.dart';
 import 'features/sync/presentation/bloc/sync_bloc.dart';
@@ -42,19 +43,10 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'xBudget',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6750A4),
-            brightness: Brightness.light,
-          ),
-          cardTheme: const CardThemeData(
-            elevation: 1,
-            surfaceTintColor: Colors.transparent,
-          ),
-        ),
+        theme: AppTheme.darkTheme,
         home: const HomeScreen(),
       ),
     );
   }
 }
+

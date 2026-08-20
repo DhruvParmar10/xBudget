@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:xbudget/core/theme/app_colors.dart';
 import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 
 class CategoryUiHelper {
@@ -32,31 +33,7 @@ class CategoryUiHelper {
   }
 
   static Color getColor(BudgetCategory cat) {
-    switch (cat) {
-      case BudgetCategory.food:
-        return Colors.orange;
-      case BudgetCategory.groceries:
-        return Colors.green;
-      case BudgetCategory.transport:
-        return Colors.blue;
-      case BudgetCategory.shopping:
-        return Colors.purple;
-      case BudgetCategory.bills:
-        return Colors.amber.shade700;
-      case BudgetCategory.entertainment:
-        return Colors.pink;
-      case BudgetCategory.health:
-        return Colors.teal;
-      case BudgetCategory.rent:
-        return Colors.indigo;
-      case BudgetCategory.investment:
-        return Colors.cyan;
-      case BudgetCategory.salary:
-        return Colors.green.shade700;
-      case BudgetCategory.p2pTransfer:
-        return Colors.deepPurple;
-      case BudgetCategory.uncategorized:
-        return Colors.grey;
-    }
+    return AppColors.getCategoryColor(cat);
   }
 }
+

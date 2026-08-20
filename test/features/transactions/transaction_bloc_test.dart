@@ -130,5 +130,36 @@ void main() {
             .having((s) => s.totalExpense, 'totalExpense', 0.0),
       ],
     );
+
+    blocTest<TransactionBloc, TransactionState>(
+      'calculates monthly totals with 1-day offset (e.g. 31st of prev month to 30th of current month)',
+      build: () => sl<TransactionBloc>(),
+      setUp: () async {
+        final now = DateTime.now();
+        // 31st of previous month (or last day of previous month)
+        final prevMonthLastDay = DateTime(now.year, now.month, 0, 10, 0);
+        // Middle of current month
+        final midMonth = DateTime(now.year, now.month, 15, 12, 0);
+        // Outside range (e.g. 2 days before previous month end)
+        final beforeRange = DateTime(now.year, now.month, 0).subtract(const Duration(days: 2));
+
+        await repository.saveTransaction(
+          createTxn(id: '10', merchant: 'Prev Month 31st', amount: 500.0, date: prevMonthLastDay),
+        );
+        await repository.saveTransaction(
+          createTxn(id: '11', merchant: 'Mid Month', amount: 300.0, date: midMonth),
+        );
+        await repository.saveTransaction(
+          createTxn(id: '12', merchant: 'Older', amount: 1000.0, date: beforeRange),
+        );
+      },
+      act: (bloc) => bloc.add(const LoadTransactionsEvent()),
+      expect: () => [
+        const TransactionLoading(),
+        isA<TransactionLoaded>()
+            .having((s) => s.transactions.length, 'transactions.length', 3)
+            .having((s) => s.totalExpense, 'totalExpense', 800.0), // 500 + 300 (excluding Older)
+      ],
+    );
   });
 }
