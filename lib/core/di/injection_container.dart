@@ -91,12 +91,13 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
   // ---------------------------------------------------------------------------
   sl.registerFactory(
     () => TransactionBloc(
-      getTransactionsUseCase: sl(),
-      getSpendBreakdownUseCase: sl(),
-      getTotalSpendUseCase: sl(),
-      getTotalIncomeUseCase: sl(),
-      updateTransactionCategoryUseCase: sl(),
-      deleteTransactionUseCase: sl(),
+      getTransactionsUseCase: sl<GetTransactionsUseCase>(),
+      getSpendBreakdownUseCase: sl<GetSpendBreakdownUseCase>(),
+      getTotalSpendUseCase: sl<GetTotalSpendUseCase>(),
+      getTotalIncomeUseCase: sl<GetTotalIncomeUseCase>(),
+      updateTransactionCategoryUseCase: sl<UpdateTransactionCategoryUseCase>(),
+      deleteTransactionUseCase: sl<DeleteTransactionUseCase>(),
+      preferences: sl.isRegistered<AppPreferences>() ? sl<AppPreferences>() : null,
     ),
   );
 

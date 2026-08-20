@@ -1,4 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xbudget/core/constants/app_preferences.dart';
+import 'package:xbudget/core/di/injection_container.dart';
+import 'package:xbudget/core/utils/cycle_date_util.dart';
 import 'package:xbudget/features/transactions/domain/usecases/delete_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_spend_breakdown_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_total_income_usecase.dart';
@@ -15,6 +18,7 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
   final GetTotalIncomeUseCase getTotalIncomeUseCase;
   final UpdateTransactionCategoryUseCase updateTransactionCategoryUseCase;
   final DeleteTransactionUseCase deleteTransactionUseCase;
+  final AppPreferences? preferences;
 
   TransactionBloc({
     required this.getTransactionsUseCase,
@@ -23,6 +27,7 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     required this.getTotalIncomeUseCase,
     required this.updateTransactionCategoryUseCase,
     required this.deleteTransactionUseCase,
+    this.preferences,
   }) : super(const TransactionInitial()) {
     on<LoadTransactionsEvent>(_onLoadTransactions);
     on<FilterCategoryEvent>(_onFilterCategory);
@@ -30,14 +35,42 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     on<DeleteTransactionEvent>(_onDeleteTransaction);
   }
 
+  AppPreferences? _resolvePreferences() {
+    if (preferences != null) return preferences;
+    try {
+      if (sl.isRegistered<AppPreferences>()) {
+        return sl<AppPreferences>();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   DateTime _getStartOfMonth([DateTime? dt]) {
-    final now = dt ?? DateTime.now();
-    return DateTime(now.year, now.month, 0);
+    final prefs = _resolvePreferences();
+    final mode = prefs?.cycleMode ?? CycleMode.offset31To30;
+    final startDay = prefs?.cycleStartDay ?? 31;
+    final endDay = prefs?.cycleEndDay ?? 30;
+
+    return CycleDateUtil.getCycleStartDate(
+      now: dt,
+      mode: mode,
+      startDay: startDay,
+      endDay: endDay,
+    );
   }
 
   DateTime _getEndOfMonth([DateTime? dt]) {
-    final now = dt ?? DateTime.now();
-    return DateTime(now.year, now.month + 1, -1, 23, 59, 59, 999);
+    final prefs = _resolvePreferences();
+    final mode = prefs?.cycleMode ?? CycleMode.offset31To30;
+    final startDay = prefs?.cycleStartDay ?? 31;
+    final endDay = prefs?.cycleEndDay ?? 30;
+
+    return CycleDateUtil.getCycleEndDate(
+      now: dt,
+      mode: mode,
+      startDay: startDay,
+      endDay: endDay,
+    );
   }
 
   Future<void> _onLoadTransactions(

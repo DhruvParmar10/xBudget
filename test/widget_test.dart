@@ -122,4 +122,46 @@ void main() {
     expect(find.text('₹ --.--'), findsOneWidget);
     expect(appPreferences.currentBalance, isNull);
   });
+
+  testWidgets('xBudget Monthly Billing Cycle setting modal allows changing cycle configuration',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+    final appPreferences = sl<AppPreferences>();
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // Navigate to Settings
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    // Verify Monthly Billing Cycle tile
+    expect(find.text('Monthly Billing Cycle'), findsOneWidget);
+
+    // Tap to open bottom sheet
+    await tester.tap(find.text('Monthly Billing Cycle'));
+    await tester.pumpAndSettle();
+
+    // Verify modal options
+    expect(find.text('31st to 30th (1-Day Offset)'), findsOneWidget);
+    expect(find.text('1st to End of Month (Calendar)'), findsOneWidget);
+    expect(find.text('1st to 1st (Full Month Span)'), findsOneWidget);
+    expect(find.text('Custom Date Range'), findsOneWidget);
+    expect(find.text('ACTIVE CYCLE PERIOD'), findsOneWidget);
+
+    // Select "1st to End of Month (Calendar)"
+    await tester.ensureVisible(find.text('1st to End of Month (Calendar)'));
+    await tester.tap(find.text('1st to End of Month (Calendar)'));
+    await tester.pumpAndSettle();
+
+    // Tap Save Configuration
+    await tester.ensureVisible(find.text('Save Configuration'));
+    await tester.tap(find.text('Save Configuration'));
+    await tester.pumpAndSettle();
+
+    // Verify preference updated
+    expect(appPreferences.cycleMode.name, equals('calendar'));
+  });
 }

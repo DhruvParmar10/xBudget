@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xbudget/core/constants/app_preferences.dart';
+import 'package:xbudget/core/di/injection_container.dart';
 import 'package:xbudget/core/theme/app_colors.dart';
+import 'package:xbudget/core/utils/cycle_date_util.dart';
 import 'package:xbudget/features/balance/presentation/bloc/balance_bloc.dart';
 import 'package:xbudget/features/balance/presentation/bloc/balance_event.dart';
 import 'package:xbudget/features/balance/presentation/widgets/balance_hero_card.dart';
 import 'package:xbudget/features/home/presentation/widgets/category_breakdown_list.dart';
 import 'package:xbudget/features/home/presentation/widgets/expense_pie_chart.dart';
 import 'package:xbudget/features/home/presentation/widgets/home_app_bar.dart';
+import 'package:xbudget/features/home/presentation/widgets/monthly_cycle_settings_bottom_sheet.dart';
 import 'package:xbudget/features/home/presentation/widgets/recent_expenses_section.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_bloc.dart';
 import 'package:xbudget/features/sync/presentation/bloc/sync_event.dart';
@@ -110,6 +114,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSettingsView() {
+    final prefs = sl.isRegistered<AppPreferences>() ? sl<AppPreferences>() : null;
+    final cycleDesc = prefs != null
+        ? CycleDateUtil.getCycleDescription(
+            mode: prefs.cycleMode,
+            startDay: prefs.cycleStartDay,
+            endDay: prefs.cycleEndDay,
+          )
+        : '31st to 30th (1-day offset)';
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       children: [
@@ -130,6 +143,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Column(
             children: [
+              ListTile(
+                leading: const Icon(Icons.calendar_month, color: AppColors.primary),
+                title: const Text('Monthly Billing Cycle', style: TextStyle(color: AppColors.cream)),
+                subtitle: Text(
+                  cycleDesc,
+                  style: const TextStyle(color: AppColors.onSurfaceVariant),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: AppColors.cream),
+                onTap: () async {
+                  await MonthlyCycleSettingsBottomSheet.show(context);
+                  setState(() {});
+                },
+              ),
+              const Divider(color: AppColors.border, height: 1),
               ListTile(
                 leading: const Icon(Icons.sync, color: AppColors.primary),
                 title: const Text('Sync SMS Inbox', style: TextStyle(color: AppColors.cream)),

@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xbudget/core/utils/cycle_date_util.dart';
 
 class AppPreferences {
   final SharedPreferences _prefs;
@@ -11,6 +12,9 @@ class AppPreferences {
   static const String _keyLastSyncTimestamp = 'last_sync_timestamp';
   static const String _keyMonthlyBudget = 'monthly_budget';
   static const String _keyIsOnboardingCompleted = 'is_onboarding_completed';
+  static const String _keyCycleMode = 'cycle_mode';
+  static const String _keyCycleStartDay = 'cycle_start_day';
+  static const String _keyCycleEndDay = 'cycle_end_day';
 
   // ---------------------------------------------------------------------------
   // LAZY SYNC TIMESTAMP (Milliseconds since epoch)
@@ -57,6 +61,49 @@ class AppPreferences {
   /// Flags onboarding as completed.
   Future<bool> setOnboardingCompleted(bool completed) async {
     return await _prefs.setBool(_keyIsOnboardingCompleted, completed);
+  }
+
+  // ---------------------------------------------------------------------------
+  // MONTHLY CYCLE DATE RANGE CONFIGURATION
+  // ---------------------------------------------------------------------------
+
+  /// Gets the active monthly cycle calculation mode.
+  /// Defaults to [CycleMode.offset31To30] (or [CycleMode.calendar]).
+  CycleMode get cycleMode {
+    final modeStr = _prefs.getString(_keyCycleMode);
+    if (modeStr == null) return CycleMode.offset31To30;
+    return CycleMode.values.firstWhere(
+      (m) => m.name == modeStr,
+      orElse: () => CycleMode.offset31To30,
+    );
+  }
+
+  /// Gets the custom cycle start day (1..31). Defaults to 31.
+  int get cycleStartDay {
+    return _prefs.getInt(_keyCycleStartDay) ?? 31;
+  }
+
+  /// Gets the custom cycle end day (1..31). Defaults to 30.
+  int get cycleEndDay {
+    return _prefs.getInt(_keyCycleEndDay) ?? 30;
+  }
+
+  /// Updates the monthly billing cycle configuration.
+  Future<bool> setCycleConfig({
+    required CycleMode mode,
+    int? startDay,
+    int? endDay,
+  }) async {
+    final r1 = await _prefs.setString(_keyCycleMode, mode.name);
+    bool r2 = true;
+    bool r3 = true;
+    if (startDay != null) {
+      r2 = await _prefs.setInt(_keyCycleStartDay, startDay);
+    }
+    if (endDay != null) {
+      r3 = await _prefs.setInt(_keyCycleEndDay, endDay);
+    }
+    return r1 && r2 && r3;
   }
 
   // ---------------------------------------------------------------------------
