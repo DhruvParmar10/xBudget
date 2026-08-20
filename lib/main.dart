@@ -1,64 +1,59 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'core/constants/app_preferences.dart';
-import 'core/services/sms_sync_service.dart';
-import 'data/datasources/transaction_local_datasource.dart';
-import 'data/repositories/transaction_repository_impl.dart';
-import 'presentation/screens/home_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'core/di/injection_container.dart';
+import 'features/balance/presentation/bloc/balance_bloc.dart';
+import 'features/home/presentation/screens/home_screen.dart';
+import 'features/sync/presentation/bloc/sync_bloc.dart';
+import 'features/transactions/presentation/bloc/transaction_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
+  await initDependencies();
 
-  final appPreferences = AppPreferences(prefs);
-  final localDataSource = TransactionLocalDataSourceImpl(prefs);
-  final repository = TransactionRepositoryImpl(localDataSource);
-  final syncService = SmsSyncService(
-    repository: repository,
-    preferences: appPreferences,
-  );
-
-  runApp(
-    MyApp(
-      preferences: appPreferences,
-      repository: repository,
-      syncService: syncService,
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final AppPreferences preferences;
-  final TransactionRepositoryImpl repository;
-  final SmsSyncService syncService;
+  final TransactionBloc? transactionBloc;
+  final BalanceBloc? balanceBloc;
+  final SyncBloc? syncBloc;
 
   const MyApp({
     super.key,
-    required this.preferences,
-    required this.repository,
-    required this.syncService,
+    this.transactionBloc,
+    this.balanceBloc,
+    this.syncBloc,
   });
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'xBudget',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.light,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<TransactionBloc>(
+          create: (_) => transactionBloc ?? sl<TransactionBloc>(),
         ),
-        cardTheme: const CardThemeData(
-          elevation: 1,
-          surfaceTintColor: Colors.transparent,
+        BlocProvider<BalanceBloc>(
+          create: (_) => balanceBloc ?? sl<BalanceBloc>(),
         ),
-      ),
-      home: HomeScreen(
-        preferences: preferences,
-        repository: repository,
-        syncService: syncService,
+        BlocProvider<SyncBloc>(
+          create: (_) => syncBloc ?? sl<SyncBloc>(),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'xBudget',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6750A4),
+            brightness: Brightness.light,
+          ),
+          cardTheme: const CardThemeData(
+            elevation: 1,
+            surfaceTintColor: Colors.transparent,
+          ),
+        ),
+        home: const HomeScreen(),
       ),
     );
   }

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
-import 'package:xbudget/core/services/sms_sync_service.dart';
-import 'package:xbudget/data/datasources/transaction_local_datasource.dart';
-import 'package:xbudget/data/repositories/transaction_repository_impl.dart';
+import 'package:xbudget/core/di/injection_container.dart';
 import 'package:xbudget/main.dart';
 
 void main() {
@@ -12,22 +10,9 @@ void main() {
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
 
-    final appPreferences = AppPreferences(prefs);
-    final localDataSource = TransactionLocalDataSourceImpl(prefs);
-    final repository = TransactionRepositoryImpl(localDataSource);
-    final syncService = SmsSyncService(
-      repository: repository,
-      preferences: appPreferences,
-    );
-
-    await tester.pumpWidget(
-      MyApp(
-        preferences: appPreferences,
-        repository: repository,
-        syncService: syncService,
-      ),
-    );
+    await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
     // Verify that our app renders the title and balance section
@@ -43,22 +28,10 @@ void main() {
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+    final appPreferences = sl<AppPreferences>();
 
-    final appPreferences = AppPreferences(prefs);
-    final localDataSource = TransactionLocalDataSourceImpl(prefs);
-    final repository = TransactionRepositoryImpl(localDataSource);
-    final syncService = SmsSyncService(
-      repository: repository,
-      preferences: appPreferences,
-    );
-
-    await tester.pumpWidget(
-      MyApp(
-        preferences: appPreferences,
-        repository: repository,
-        syncService: syncService,
-      ),
-    );
+    await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
     // Tap "Update"
@@ -92,22 +65,10 @@ void main() {
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+    final appPreferences = sl<AppPreferences>();
 
-    final appPreferences = AppPreferences(prefs);
-    final localDataSource = TransactionLocalDataSourceImpl(prefs);
-    final repository = TransactionRepositoryImpl(localDataSource);
-    final syncService = SmsSyncService(
-      repository: repository,
-      preferences: appPreferences,
-    );
-
-    await tester.pumpWidget(
-      MyApp(
-        preferences: appPreferences,
-        repository: repository,
-        syncService: syncService,
-      ),
-    );
+    await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
     // Tap "Update" to open modal
