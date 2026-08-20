@@ -119,6 +119,17 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   @override
+  Future<double> getTotalIncome({DateTime? startDate, DateTime? endDate}) async {
+    final txns = await getTransactions(
+      startDate: startDate,
+      endDate: endDate,
+      transactionType: 'income',
+    );
+    return txns.fold<double>(0.0, (sum, txn) => sum + txn.amount);
+  }
+
+
+  @override
   Future<Map<BudgetCategory, double>> getSpendByCategory({
     DateTime? startDate,
     DateTime? endDate,

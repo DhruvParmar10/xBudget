@@ -25,6 +25,7 @@ void main() {
     required double amount,
     BudgetCategory category = BudgetCategory.food,
     String transactionType = 'expense',
+    DateTime? date,
   }) {
     return TransactionEntity(
       id: id,
@@ -33,7 +34,7 @@ void main() {
       transactionType: transactionType,
       category: category,
       isP2P: false,
-      date: DateTime(2026, 8, 20),
+      date: date ?? DateTime.now(),
       rawMessage: 'Paid $amount to $merchant',
       createdAt: DateTime.now(),
     );
@@ -52,15 +53,27 @@ void main() {
         await repository.saveTransaction(
           createTxn(id: '1', merchant: 'Swiggy', amount: 200.0),
         );
+        await repository.saveTransaction(
+          createTxn(
+            id: '2',
+            merchant: 'Salary',
+            amount: 50000.0,
+            transactionType: 'income',
+            category: BudgetCategory.salary,
+          ),
+        );
       },
       act: (bloc) => bloc.add(const LoadTransactionsEvent()),
       expect: () => [
         const TransactionLoading(),
         isA<TransactionLoaded>()
-            .having((s) => s.transactions.length, 'transactions.length', 1)
-            .having((s) => s.totalExpense, 'totalExpense', 200.0),
+            .having((s) => s.transactions.length, 'transactions.length', 2)
+            .having((s) => s.totalExpense, 'totalExpense', 200.0)
+            .having((s) => s.totalIncome, 'totalIncome', 50000.0)
+            .having((s) => s.netFlow, 'netFlow', 49800.0),
       ],
     );
+
 
     blocTest<TransactionBloc, TransactionState>(
       'filters transactions when FilterCategoryEvent is added',

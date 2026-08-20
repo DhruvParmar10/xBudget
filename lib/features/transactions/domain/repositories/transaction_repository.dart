@@ -53,9 +53,13 @@ abstract class TransactionRepository {
   /// Computes total spend (expenses) for a given date range.
   Future<double> getTotalSpend({DateTime? startDate, DateTime? endDate});
 
+  /// Computes total income for a given date range.
+  Future<double> getTotalIncome({DateTime? startDate, DateTime? endDate});
+
   /// Computes spend breakdown grouped by category for a given date range.
   Future<Map<BudgetCategory, double>> getSpendByCategory({
     DateTime? startDate,
     DateTime? endDate,
   });
 }
+

@@ -15,6 +15,7 @@ import 'package:xbudget/features/transactions/data/repositories/transaction_repo
 import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:xbudget/features/transactions/domain/usecases/delete_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_spend_breakdown_usecase.dart';
+import 'package:xbudget/features/transactions/domain/usecases/get_total_income_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_total_spend_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_transactions_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/manage_category_rules_usecase.dart';
@@ -63,6 +64,7 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
   sl.registerLazySingleton(() => GetTransactionsUseCase(sl()));
   sl.registerLazySingleton(() => GetSpendBreakdownUseCase(sl()));
   sl.registerLazySingleton(() => GetTotalSpendUseCase(sl()));
+  sl.registerLazySingleton(() => GetTotalIncomeUseCase(sl()));
   sl.registerLazySingleton(() => UpdateTransactionCategoryUseCase(sl()));
   sl.registerLazySingleton(() => DeleteTransactionUseCase(sl()));
   sl.registerLazySingleton(() => SaveCategoryRuleUseCase(sl()));
@@ -92,10 +94,12 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
       getTransactionsUseCase: sl(),
       getSpendBreakdownUseCase: sl(),
       getTotalSpendUseCase: sl(),
+      getTotalIncomeUseCase: sl(),
       updateTransactionCategoryUseCase: sl(),
       deleteTransactionUseCase: sl(),
     ),
   );
+
 
   sl.registerFactory(
     () => BalanceBloc(

@@ -18,10 +18,11 @@ void main() {
     // Verify that our app renders the title and balance section
     expect(find.text('xBudget'), findsOneWidget);
     expect(find.text('CURRENT BALANCE'), findsOneWidget);
-    expect(find.text('Total Expense'), findsOneWidget);
-    expect(find.text('Total Income'), findsOneWidget);
+    expect(find.text('Monthly Expense'), findsOneWidget);
+    expect(find.text('Monthly Income'), findsOneWidget);
     expect(find.text('Net Flow'), findsOneWidget);
     expect(find.text('Update'), findsOneWidget);
+
   });
 
   testWidgets('xBudget Note Balance modal updates balance correctly',

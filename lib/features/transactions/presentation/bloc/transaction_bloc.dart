@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xbudget/features/transactions/domain/usecases/delete_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_spend_breakdown_usecase.dart';
+import 'package:xbudget/features/transactions/domain/usecases/get_total_income_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_total_spend_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_transactions_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/update_transaction_category_usecase.dart';
@@ -11,6 +12,7 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
   final GetTransactionsUseCase getTransactionsUseCase;
   final GetSpendBreakdownUseCase getSpendBreakdownUseCase;
   final GetTotalSpendUseCase getTotalSpendUseCase;
+  final GetTotalIncomeUseCase getTotalIncomeUseCase;
   final UpdateTransactionCategoryUseCase updateTransactionCategoryUseCase;
   final DeleteTransactionUseCase deleteTransactionUseCase;
 
@@ -18,6 +20,7 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     required this.getTransactionsUseCase,
     required this.getSpendBreakdownUseCase,
     required this.getTotalSpendUseCase,
+    required this.getTotalIncomeUseCase,
     required this.updateTransactionCategoryUseCase,
     required this.deleteTransactionUseCase,
   }) : super(const TransactionInitial()) {
@@ -25,6 +28,16 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     on<FilterCategoryEvent>(_onFilterCategory);
     on<UpdateCategoryEvent>(_onUpdateCategory);
     on<DeleteTransactionEvent>(_onDeleteTransaction);
+  }
+
+  DateTime _getStartOfMonth([DateTime? dt]) {
+    final now = dt ?? DateTime.now();
+    return DateTime(now.year, now.month, 1);
+  }
+
+  DateTime _getEndOfMonth([DateTime? dt]) {
+    final now = dt ?? DateTime.now();
+    return DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
   }
 
   Future<void> _onLoadTransactions(
@@ -46,27 +59,29 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
         ),
       );
 
+      final monthStartDate = event.startDate ?? _getStartOfMonth();
+      final monthEndDate = event.endDate ?? _getEndOfMonth();
+
       final categorySpend = await getSpendBreakdownUseCase(
         GetSpendBreakdownParams(
-          startDate: event.startDate,
-          endDate: event.endDate,
+          startDate: monthStartDate,
+          endDate: monthEndDate,
         ),
       );
 
       final totalExpense = await getTotalSpendUseCase(
         GetTotalSpendParams(
-          startDate: event.startDate,
-          endDate: event.endDate,
+          startDate: monthStartDate,
+          endDate: monthEndDate,
         ),
       );
 
-      final allTransactions = await getTransactionsUseCase(
-        const GetTransactionsParams(),
+      final totalIncome = await getTotalIncomeUseCase(
+        GetTotalIncomeParams(
+          startDate: monthStartDate,
+          endDate: monthEndDate,
+        ),
       );
-
-      final totalIncome = allTransactions
-          .where((t) => t.isIncome)
-          .fold<double>(0.0, (sum, t) => sum + t.amount);
 
       emit(
         TransactionLoaded(
@@ -93,21 +108,29 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
         GetTransactionsParams(category: selectedCategory),
       );
 
+      final monthStartDate = _getStartOfMonth();
+      final monthEndDate = _getEndOfMonth();
+
       final categorySpend = await getSpendBreakdownUseCase(
-        const GetSpendBreakdownParams(),
+        GetSpendBreakdownParams(
+          startDate: monthStartDate,
+          endDate: monthEndDate,
+        ),
       );
 
       final totalExpense = await getTotalSpendUseCase(
-        const GetTotalSpendParams(),
+        GetTotalSpendParams(
+          startDate: monthStartDate,
+          endDate: monthEndDate,
+        ),
       );
 
-      final allTransactions = await getTransactionsUseCase(
-        const GetTransactionsParams(),
+      final totalIncome = await getTotalIncomeUseCase(
+        GetTotalIncomeParams(
+          startDate: monthStartDate,
+          endDate: monthEndDate,
+        ),
       );
-
-      final totalIncome = allTransactions
-          .where((t) => t.isIncome)
-          .fold<double>(0.0, (sum, t) => sum + t.amount);
 
       emit(
         TransactionLoaded(
@@ -122,6 +145,7 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
       emit(TransactionError('Failed to filter transactions: $e'));
     }
   }
+
 
   Future<void> _onUpdateCategory(
     UpdateCategoryEvent event,

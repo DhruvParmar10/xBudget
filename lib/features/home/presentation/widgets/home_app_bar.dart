@@ -54,15 +54,6 @@ class HomeAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           actions: [
             IconButton(
-              tooltip: 'Load Sample SMS',
-              icon: const Icon(Icons.flash_on),
-              onPressed: isLoading
-                  ? null
-                  : () {
-                      context.read<SyncBloc>().add(const InjectSampleSmsEvent());
-                    },
-            ),
-            IconButton(
               tooltip: 'Sync SMS',
               icon: const Icon(Icons.sync),
               onPressed: isLoading

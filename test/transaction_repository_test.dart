@@ -236,11 +236,15 @@ void main() {
       final totalSpend = await repository.getTotalSpend();
       expect(totalSpend, equals(1000.0)); // 500 + 300 + 200 (excludes salary income)
 
+      final totalIncome = await repository.getTotalIncome();
+      expect(totalIncome, equals(50000.0)); // Salary income
+
       final breakdown = await repository.getSpendByCategory();
       expect(breakdown[BudgetCategory.food], equals(800.0));
       expect(breakdown[BudgetCategory.transport], equals(200.0));
     });
   });
+
 
   group('AppPreferences Current Balance Tests', () {
     late AppPreferences preferences;

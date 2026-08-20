@@ -29,7 +29,7 @@ class EmptyTransactionsView extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tap "Sync SMS" to parse your inbox, or tap ⚡ to load sample ICICI SMS.',
+            'Tap "Sync SMS" to parse your inbox, or load sample ICICI SMS below.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: Colors.grey[500]),
           ),

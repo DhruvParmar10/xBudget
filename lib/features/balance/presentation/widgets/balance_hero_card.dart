@@ -206,84 +206,122 @@ class BalanceHeroCard extends StatelessWidget {
 
                         // Income & Expense & Net Cash Flow Row
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.arrow_downward, size: 13, color: Colors.redAccent.shade700),
+                                      Icon(Icons.arrow_downward, size: 12, color: Colors.redAccent.shade700),
                                       const SizedBox(width: 2),
-                                      const Text(
-                                        'Total Expense',
-                                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                                      const Flexible(
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Monthly Expense',
+                                            style: TextStyle(color: Colors.grey, fontSize: 11),
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  Text(
-                                    '₹${totalExpense.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.redAccent,
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '₹${totalExpense.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.redAccent,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.arrow_upward, size: 13, color: Colors.green.shade700),
+                                      Icon(Icons.arrow_upward, size: 12, color: Colors.green.shade700),
                                       const SizedBox(width: 2),
-                                      const Text(
-                                        'Total Income',
-                                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                                      const Flexible(
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Monthly Income',
+                                            style: TextStyle(color: Colors.grey, fontSize: 11),
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  Text(
-                                    '₹${totalIncome.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '₹${totalIncome.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
                                         netFlow >= 0 ? Icons.trending_up : Icons.trending_down,
-                                        size: 13,
+                                        size: 12,
                                         color: netFlow >= 0 ? Colors.teal : Colors.orange,
                                       ),
                                       const SizedBox(width: 2),
-                                      const Text(
-                                        'Net Flow',
-                                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                                      const Flexible(
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Net Flow',
+                                            style: TextStyle(color: Colors.grey, fontSize: 11),
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  Text(
-                                    '${netFlow >= 0 ? '+' : ''}₹${netFlow.toStringAsFixed(2)}',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: netFlow >= 0 ? Colors.teal.shade700 : Colors.orange.shade800,
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      netFlow >= 0
+                                          ? '+₹${netFlow.toStringAsFixed(2)}'
+                                          : '-₹${netFlow.abs().toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: netFlow >= 0 ? Colors.teal.shade700 : Colors.orange.shade800,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -291,6 +329,8 @@ class BalanceHeroCard extends StatelessWidget {
                             ),
                           ],
                         ),
+
+
 
                         const SizedBox(height: 12),
                         Container(
