@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
 import 'package:xbudget/core/di/injection_container.dart';
 import 'package:xbudget/core/utils/cycle_date_util.dart';
+import 'package:xbudget/features/transactions/domain/usecases/add_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/delete_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_spend_breakdown_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_total_income_usecase.dart';
@@ -18,6 +19,7 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
   final GetTotalIncomeUseCase getTotalIncomeUseCase;
   final UpdateTransactionCategoryUseCase updateTransactionCategoryUseCase;
   final DeleteTransactionUseCase deleteTransactionUseCase;
+  final AddTransactionUseCase? addTransactionUseCase;
   final AppPreferences? preferences;
 
   TransactionBloc({
@@ -27,12 +29,14 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     required this.getTotalIncomeUseCase,
     required this.updateTransactionCategoryUseCase,
     required this.deleteTransactionUseCase,
+    this.addTransactionUseCase,
     this.preferences,
   }) : super(const TransactionInitial()) {
     on<LoadTransactionsEvent>(_onLoadTransactions);
     on<FilterCategoryEvent>(_onFilterCategory);
     on<UpdateCategoryEvent>(_onUpdateCategory);
     on<DeleteTransactionEvent>(_onDeleteTransaction);
+    on<AddTransactionEvent>(_onAddTransaction);
   }
 
   AppPreferences? _resolvePreferences() {
@@ -216,6 +220,36 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
       add(FilterCategoryEvent(currentCategory));
     } catch (e) {
       emit(TransactionError('Failed to delete transaction: $e'));
+    }
+  }
+
+  Future<void> _onAddTransaction(
+    AddTransactionEvent event,
+    Emitter<TransactionState> emit,
+  ) async {
+    try {
+      final useCase = addTransactionUseCase ?? (sl.isRegistered<AddTransactionUseCase>() ? sl<AddTransactionUseCase>() : null);
+      if (useCase != null) {
+        await useCase(
+          AddTransactionParams(
+            amount: event.amount,
+            merchant: event.merchant,
+            transactionType: event.transactionType,
+            category: event.category,
+            isP2P: event.isP2P,
+            date: event.date,
+            note: event.note,
+          ),
+        );
+      }
+
+      final currentCategory = state is TransactionLoaded
+          ? (state as TransactionLoaded).selectedCategory
+          : null;
+
+      add(FilterCategoryEvent(currentCategory));
+    } catch (e) {
+      emit(TransactionError('Failed to add transaction: $e'));
     }
   }
 }

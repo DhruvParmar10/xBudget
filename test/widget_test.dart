@@ -166,4 +166,81 @@ void main() {
     // Verify preference updated
     expect(appPreferences.cycleMode.name, equals('calendar'));
   });
+
+  testWidgets('xBudget Add Transaction modal adds expense and deducts from Current Balance',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+    final appPreferences = sl<AppPreferences>();
+
+    // Set initial balance of 20,000 at a fixed earlier timestamp
+    final baseTime = DateTime.now().subtract(const Duration(minutes: 5));
+    await appPreferences.setCurrentBalance(20000.0, source: 'manual', updatedAt: baseTime);
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // Verify initial balance
+    expect(find.text('₹20000.00'), findsOneWidget);
+
+    // Tap "Add Transaction" FAB
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    // Verify modal appears
+    expect(find.text('Deducts from Current Balance'), findsOneWidget);
+
+    // Enter amount 2500
+    await tester.enterText(find.byType(TextField).first, '2500');
+    await tester.pumpAndSettle();
+
+    // Tap "Record Expense"
+    await tester.ensureVisible(find.text('Record Expense'));
+    await tester.tap(find.text('Record Expense'));
+    await tester.pumpAndSettle();
+
+    // Verify balance is deducted: 20000 - 2500 = 17500.00
+    expect(find.text('₹17500.00'), findsOneWidget);
+  });
+
+  testWidgets('xBudget Add Transaction modal adds income and adds to Current Balance',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+    final appPreferences = sl<AppPreferences>();
+
+    // Set initial balance of 10,000 at a fixed earlier timestamp
+    final baseTime = DateTime.now().subtract(const Duration(minutes: 5));
+    await appPreferences.setCurrentBalance(10000.0, source: 'manual', updatedAt: baseTime);
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // Verify initial balance
+    expect(find.text('₹10000.00'), findsOneWidget);
+
+    // Tap "Add Transaction" FAB
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    // Switch to "Income (+)"
+    await tester.tap(find.text('Income (+)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Adds to Current Balance'), findsOneWidget);
+
+    // Enter amount 5000
+    await tester.enterText(find.byType(TextField).first, '5000');
+    await tester.pumpAndSettle();
+
+    // Tap "Record Income"
+    await tester.ensureVisible(find.text('Record Income'));
+    await tester.tap(find.text('Record Income'));
+    await tester.pumpAndSettle();
+
+    // Verify balance is increased: 10000 + 5000 = 15000.00
+    expect(find.text('₹15000.00'), findsOneWidget);
+  });
 }

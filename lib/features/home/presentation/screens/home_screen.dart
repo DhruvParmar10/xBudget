@@ -20,6 +20,8 @@ import 'package:xbudget/features/sync/presentation/bloc/sync_state.dart';
 import 'package:xbudget/features/sync/presentation/widgets/sync_status_banner.dart';
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_bloc.dart';
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_event.dart';
+import 'package:xbudget/features/transactions/presentation/bloc/transaction_state.dart';
+import 'package:xbudget/features/transactions/presentation/widgets/add_transaction_bottom_sheet.dart';
 import 'package:xbudget/features/transactions/presentation/widgets/category_filter_chips.dart';
 import 'package:xbudget/features/transactions/presentation/widgets/transaction_list_view.dart';
 import 'package:xbudget/features/home/presentation/widgets/google_sheets_sync_card.dart';
@@ -85,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onSeeMore: () => _onNavBarTapped(0),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -101,18 +103,29 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
-          const Text(
-            'All Expenses & Transactions',
-            style: TextStyle(
-              color: AppColors.cream,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'All Expenses & Transactions',
+                style: TextStyle(
+                  color: AppColors.cream,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_circle, color: AppColors.primary, size: 28),
+                tooltip: 'Add Transaction',
+                onPressed: () => AddTransactionBottomSheet.show(context),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           const CategoryFilterChips(),
           const SizedBox(height: 16),
           const TransactionListView(),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -161,22 +174,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   await MonthlyCycleSettingsBottomSheet.show(context);
                   setState(() {});
+                  if (mounted) {
+                    context.read<TransactionBloc>().add(const LoadTransactionsEvent());
+                  }
                 },
               ),
-              const Divider(color: AppColors.border, height: 1),
+              const Divider(color: AppColors.divider, height: 1),
               ListTile(
                 leading: const Icon(Icons.sync, color: AppColors.primary),
                 title: const Text('Sync SMS Inbox', style: TextStyle(color: AppColors.cream)),
-                subtitle: const Text('Parse transactions from bank messages', style: TextStyle(color: AppColors.onSurfaceVariant)),
+                subtitle: const Text('Scan device inbox for new SMS messages', style: TextStyle(color: AppColors.onSurfaceVariant)),
                 trailing: const Icon(Icons.chevron_right, color: AppColors.cream),
                 onTap: () {
                   context.read<SyncBloc>().add(const TriggerSmsSyncEvent());
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Syncing SMS inbox...')),
-                  );
                 },
               ),
-              const Divider(color: AppColors.border, height: 1),
+              const Divider(color: AppColors.divider, height: 1),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppColors.expense),
                 title: const Text('Reset Storage', style: TextStyle(color: AppColors.expense)),
@@ -209,6 +222,13 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           },
         ),
+        BlocListener<TransactionBloc, TransactionState>(
+          listener: (context, state) {
+            if (state is TransactionLoaded) {
+              context.read<BalanceBloc>().add(const LoadBalanceEvent());
+            }
+          },
+        ),
       ],
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -221,6 +241,18 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildSettingsView(),
           ],
         ),
+        floatingActionButton: _currentNavIndex != 2
+            ? FloatingActionButton.extended(
+                onPressed: () => AddTransactionBottomSheet.show(context),
+                backgroundColor: AppColors.caramelOrange,
+                foregroundColor: AppColors.cream,
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  'Add Transaction',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              )
+            : null,
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentNavIndex,
           onTap: _onNavBarTapped,

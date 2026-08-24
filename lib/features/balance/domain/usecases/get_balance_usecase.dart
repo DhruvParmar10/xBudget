@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
 import 'package:xbudget/core/usecases/usecase.dart';
+import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
 
 class BalanceData extends Equatable {
   final double? currentBalance;
@@ -19,14 +20,46 @@ class BalanceData extends Equatable {
 
 class GetBalanceUseCase implements UseCase<BalanceData, NoParams> {
   final AppPreferences preferences;
+  final TransactionRepository? repository;
 
-  GetBalanceUseCase(this.preferences);
+  GetBalanceUseCase({
+    required this.preferences,
+    this.repository,
+  });
 
   @override
   Future<BalanceData> call(NoParams params) async {
+    final baseBalance = preferences.currentBalance;
+    if (baseBalance == null) {
+      return BalanceData(
+        currentBalance: null,
+        balanceUpdatedAt: null,
+        balanceSource: preferences.balanceSource,
+      );
+    }
+
+    final updatedAt = preferences.balanceUpdatedAt;
+    double calculatedBalance = baseBalance;
+
+    if (updatedAt != null && repository != null) {
+      final transactions = await repository!.getTransactions(
+        startDate: updatedAt,
+      );
+
+      for (final txn in transactions) {
+        if (txn.date.isAfter(updatedAt)) {
+          if (txn.isExpense) {
+            calculatedBalance -= txn.amount;
+          } else if (txn.isIncome) {
+            calculatedBalance += txn.amount;
+          }
+        }
+      }
+    }
+
     return BalanceData(
-      currentBalance: preferences.currentBalance,
-      balanceUpdatedAt: preferences.balanceUpdatedAt,
+      currentBalance: calculatedBalance,
+      balanceUpdatedAt: updatedAt,
       balanceSource: preferences.balanceSource,
     );
   }

@@ -117,7 +117,9 @@ class BalanceHeroCard extends StatelessWidget {
                       onTap: () => NoteBalanceBottomSheet.show(context),
                       child: Text(
                         currentBalance != null
-                            ? '₹${currentBalance.toStringAsFixed(2)}'
+                            ? (currentBalance < 0
+                                ? '-₹${(-currentBalance).toStringAsFixed(2)}'
+                                : '₹${currentBalance.toStringAsFixed(2)}')
                             : '₹ --.--',
                         style: const TextStyle(
                           fontSize: 36,

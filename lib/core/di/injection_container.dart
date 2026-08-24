@@ -17,6 +17,7 @@ import 'package:xbudget/features/sync/presentation/bloc/sync_bloc.dart';
 import 'package:xbudget/features/transactions/data/datasources/transaction_local_datasource.dart';
 import 'package:xbudget/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:xbudget/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:xbudget/features/transactions/domain/usecases/add_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/delete_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_spend_breakdown_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_total_income_usecase.dart';
@@ -77,13 +78,19 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
   sl.registerLazySingleton(() => GetTotalIncomeUseCase(sl()));
   sl.registerLazySingleton(() => UpdateTransactionCategoryUseCase(sl()));
   sl.registerLazySingleton(() => DeleteTransactionUseCase(sl()));
+  sl.registerLazySingleton(() => AddTransactionUseCase(sl()));
   sl.registerLazySingleton(() => SaveCategoryRuleUseCase(sl()));
   sl.registerLazySingleton(() => GetCategoryRulesUseCase(sl()));
 
   // ---------------------------------------------------------------------------
   // Use Cases - Balance
   // ---------------------------------------------------------------------------
-  sl.registerLazySingleton(() => GetBalanceUseCase(sl()));
+  sl.registerLazySingleton(
+    () => GetBalanceUseCase(
+      preferences: sl(),
+      repository: sl(),
+    ),
+  );
   sl.registerLazySingleton(() => SetBalanceUseCase(sl()));
   sl.registerLazySingleton(() => ClearBalanceUseCase(sl()));
 
@@ -132,6 +139,7 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
       getTotalIncomeUseCase: sl<GetTotalIncomeUseCase>(),
       updateTransactionCategoryUseCase: sl<UpdateTransactionCategoryUseCase>(),
       deleteTransactionUseCase: sl<DeleteTransactionUseCase>(),
+      addTransactionUseCase: sl<AddTransactionUseCase>(),
       preferences: sl.isRegistered<AppPreferences>() ? sl<AppPreferences>() : null,
     ),
   );
