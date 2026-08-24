@@ -93,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildExpensesView() {
+  Widget _buildTransactionsView() {
     return RefreshIndicator(
       color: AppColors.primary,
       backgroundColor: AppColors.surface,
@@ -236,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: IndexedStack(
           index: _currentNavIndex,
           children: [
-            _buildExpensesView(),
+            _buildTransactionsView(),
             _buildHomeDashboard(),
             _buildSettingsView(),
           ],
@@ -262,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.receipt_long),
-              label: 'Expenses',
+              label: 'Transactions',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.home),

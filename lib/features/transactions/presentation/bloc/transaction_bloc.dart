@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
 import 'package:xbudget/core/di/injection_container.dart';
 import 'package:xbudget/core/utils/cycle_date_util.dart';
+import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 import 'package:xbudget/features/transactions/domain/usecases/add_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/delete_transaction_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/get_spend_breakdown_usecase.dart';
@@ -77,6 +78,59 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     );
   }
 
+  Future<void> _loadAndEmitTransactions(
+    Emitter<TransactionState> emit, {
+    BudgetCategory? category,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? query,
+    String? transactionType,
+  }) async {
+    final transactions = await getTransactionsUseCase(
+      GetTransactionsParams(
+        startDate: startDate,
+        endDate: endDate,
+        category: category,
+        query: query,
+        transactionType: transactionType,
+      ),
+    );
+
+    final monthStartDate = startDate ?? _getStartOfMonth();
+    final monthEndDate = endDate ?? _getEndOfMonth();
+
+    final categorySpend = await getSpendBreakdownUseCase(
+      GetSpendBreakdownParams(
+        startDate: monthStartDate,
+        endDate: monthEndDate,
+      ),
+    );
+
+    final totalExpense = await getTotalSpendUseCase(
+      GetTotalSpendParams(
+        startDate: monthStartDate,
+        endDate: monthEndDate,
+      ),
+    );
+
+    final totalIncome = await getTotalIncomeUseCase(
+      GetTotalIncomeParams(
+        startDate: monthStartDate,
+        endDate: monthEndDate,
+      ),
+    );
+
+    emit(
+      TransactionLoaded(
+        transactions: transactions,
+        categorySpend: categorySpend,
+        totalExpense: totalExpense,
+        totalIncome: totalIncome,
+        selectedCategory: category,
+      ),
+    );
+  }
+
   Future<void> _onLoadTransactions(
     LoadTransactionsEvent event,
     Emitter<TransactionState> emit,
@@ -84,50 +138,13 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     try {
       emit(const TransactionLoading());
 
-      final currentSelectedCategory = event.category;
-
-      final transactions = await getTransactionsUseCase(
-        GetTransactionsParams(
-          startDate: event.startDate,
-          endDate: event.endDate,
-          category: currentSelectedCategory,
-          query: event.query,
-          transactionType: event.transactionType,
-        ),
-      );
-
-      final monthStartDate = event.startDate ?? _getStartOfMonth();
-      final monthEndDate = event.endDate ?? _getEndOfMonth();
-
-      final categorySpend = await getSpendBreakdownUseCase(
-        GetSpendBreakdownParams(
-          startDate: monthStartDate,
-          endDate: monthEndDate,
-        ),
-      );
-
-      final totalExpense = await getTotalSpendUseCase(
-        GetTotalSpendParams(
-          startDate: monthStartDate,
-          endDate: monthEndDate,
-        ),
-      );
-
-      final totalIncome = await getTotalIncomeUseCase(
-        GetTotalIncomeParams(
-          startDate: monthStartDate,
-          endDate: monthEndDate,
-        ),
-      );
-
-      emit(
-        TransactionLoaded(
-          transactions: transactions,
-          categorySpend: categorySpend,
-          totalExpense: totalExpense,
-          totalIncome: totalIncome,
-          selectedCategory: currentSelectedCategory,
-        ),
+      await _loadAndEmitTransactions(
+        emit,
+        category: event.category,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        query: event.query,
+        transactionType: event.transactionType,
       );
     } catch (e) {
       emit(TransactionError('Failed to load transactions: $e'));
@@ -139,50 +156,14 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
     Emitter<TransactionState> emit,
   ) async {
     try {
-      final selectedCategory = event.category;
-
-      final transactions = await getTransactionsUseCase(
-        GetTransactionsParams(category: selectedCategory),
-      );
-
-      final monthStartDate = _getStartOfMonth();
-      final monthEndDate = _getEndOfMonth();
-
-      final categorySpend = await getSpendBreakdownUseCase(
-        GetSpendBreakdownParams(
-          startDate: monthStartDate,
-          endDate: monthEndDate,
-        ),
-      );
-
-      final totalExpense = await getTotalSpendUseCase(
-        GetTotalSpendParams(
-          startDate: monthStartDate,
-          endDate: monthEndDate,
-        ),
-      );
-
-      final totalIncome = await getTotalIncomeUseCase(
-        GetTotalIncomeParams(
-          startDate: monthStartDate,
-          endDate: monthEndDate,
-        ),
-      );
-
-      emit(
-        TransactionLoaded(
-          transactions: transactions,
-          categorySpend: categorySpend,
-          totalExpense: totalExpense,
-          totalIncome: totalIncome,
-          selectedCategory: selectedCategory,
-        ),
+      await _loadAndEmitTransactions(
+        emit,
+        category: event.category,
       );
     } catch (e) {
       emit(TransactionError('Failed to filter transactions: $e'));
     }
   }
-
 
   Future<void> _onUpdateCategory(
     UpdateCategoryEvent event,
@@ -200,7 +181,10 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
           ? (state as TransactionLoaded).selectedCategory
           : null;
 
-      add(FilterCategoryEvent(currentCategory));
+      await _loadAndEmitTransactions(
+        emit,
+        category: currentCategory,
+      );
     } catch (e) {
       emit(TransactionError('Failed to update category: $e'));
     }
@@ -217,7 +201,10 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
           ? (state as TransactionLoaded).selectedCategory
           : null;
 
-      add(FilterCategoryEvent(currentCategory));
+      await _loadAndEmitTransactions(
+        emit,
+        category: currentCategory,
+      );
     } catch (e) {
       emit(TransactionError('Failed to delete transaction: $e'));
     }
@@ -247,7 +234,10 @@ class TransactionBloc extends Bloc<TransactionEvent, TransactionState> {
           ? (state as TransactionLoaded).selectedCategory
           : null;
 
-      add(FilterCategoryEvent(currentCategory));
+      await _loadAndEmitTransactions(
+        emit,
+        category: currentCategory,
+      );
     } catch (e) {
       emit(TransactionError('Failed to add transaction: $e'));
     }

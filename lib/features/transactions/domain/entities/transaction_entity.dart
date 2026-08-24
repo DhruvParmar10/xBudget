@@ -1,7 +1,8 @@
+import 'package:equatable/equatable.dart';
 import 'budget_category.dart';
 
 /// Pure domain entity representing a financial transaction.
-class TransactionEntity {
+class TransactionEntity extends Equatable {
   /// Deterministic unique identifier (SHA-256 hash) for deduplication.
   final String id;
 
@@ -81,14 +82,19 @@ class TransactionEntity {
   }
 
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TransactionEntity &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
-
-  @override
-  int get hashCode => id.hashCode;
+  List<Object?> get props => [
+        id,
+        amount,
+        merchant,
+        transactionType,
+        category,
+        isP2P,
+        date,
+        rawMessage,
+        isUserCategorized,
+        note,
+        createdAt,
+      ];
 
   @override
   String toString() {

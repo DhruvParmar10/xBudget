@@ -272,6 +272,12 @@ class SmsSyncService {
       _RawSmsMessage(
         sender: 'VM-ICICIB',
         body:
+            'Dear Customer, Acct XX892 is credited with Rs 140.00 on ${now.subtract(const Duration(days: 12)).day}-Aug-26 from AYUSH SINGH. UPI:892314-ICICI Bank.',
+        date: now.subtract(const Duration(days: 12)),
+      ),
+      _RawSmsMessage(
+        sender: 'VM-ICICIB',
+        body:
             'Total Bal: Rs.94,481.00. Your A/c XX892 is credited with Rs 75,000.00 on ${now.subtract(const Duration(days: 20)).day}-Aug-26 by salary transfer.',
         date: now.subtract(const Duration(days: 20)),
       ),

@@ -75,6 +75,9 @@ class TransactionRepositoryImpl implements TransactionRepository {
       category: category,
       isUserCategorized: isUserCategorized,
     );
+    if (isUserCategorized && existing.merchant.trim().isNotEmpty) {
+      await _localDataSource.saveUserCategoryRule(existing.merchant.trim(), category);
+    }
     return await _localDataSource.updateTransaction(
       TransactionModel.fromEntity(updated),
     );

@@ -26,23 +26,23 @@ class IciciParserStrategy implements BankParserStrategy {
   );
 
   // Amount Anchors & Balance Filters:
-  // 1. Anchored to verbs (e.g. "Rs 141.00 debited", "debited from A/c XX for Rs 350", "INR 1,250 credited")
+  // 1. Anchored to verbs (e.g. "Rs 141.00 debited", "debited from A/c XX for Rs 350", "credited:Rs. 25,000.00", "INR 1,250 credited")
   static final RegExp _anchoredAmountRegex = RegExp(
     r'(?:(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{2})?)\s*(?:has been|is|was)?\s*(?:debited|credited|spent|transferred|withdrawn|paid|used))|'
-    r'(?:(?:debited|credited|spent|transferred|withdrawn|paid|used)\s+(?:(?:from|to|in)\s+[^,;.]+?\s+)?(?:by|for|with|of)?\s*(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{2})?))',
+    r'(?:(?:debited|credited|spent|transferred|withdrawn|paid|used)\s*(?::|by|for|with|of)?\s*(?:(?:from|to|in)\s+[^,;.]+?\s+)?(?:by|for|with|of)?\s*(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{2})?))',
     caseSensitive: false,
   );
 
   // Balance Pattern: Matches balance/limit text so it can be stripped before fallback extraction
-  // e.g. "Avl Bal Rs 5,420.00", "Available Balance: INR 10,000", "Total Bal: Rs.45,000", "Bal is Rs 1,800", "Available limit is INR 50,000"
+  // e.g. "Avl Bal Rs 5,420.00", "Available Balance is Rs. 45,000.00", "Available Balance: INR 10,000", "Total Bal: Rs.45,000", "Bal is Rs 1,800", "Available limit is INR 50,000"
   static final RegExp _balancePattern = RegExp(
-    r'(?:avl(?:ail)?(?:\.|\s+)?bal(?:ance)?|total\s+bal(?:ance)?|a\/c\s+bal(?:ance)?|bal(?:ance)?(?:\s+is)?|limit)\s*(?::|=|is)?\s*(?:Rs\.?|INR)?\s*[\d,]+(?:\.\d{2})?',
+    r'(?:(?:avail(?:able)?|avl)(?:\.|\s+)?bal(?:ance)?|total\s+bal(?:ance)?|a\/c\s+bal(?:ance)?|bal(?:ance)?|limit)\s*(?::|=|is)?\s*(?:Rs\.?|INR)?\s*[\d,]+(?:\.\d{2})?',
     caseSensitive: false,
   );
 
   // Balance Extraction Pattern: Specifically extracts the available balance amount
   static final RegExp _balanceExtractRegex = RegExp(
-    r'(?:avl(?:ail)?(?:\.|\s+)?bal(?:ance)?|total\s+bal(?:ance)?|a\/c\s+bal(?:ance)?|bal(?:ance)?(?:\s+is)?)\s*(?::|=|is)?\s*(?:Rs\.?|INR)?\s*([\d,]+(?:\.\d{2})?)',
+    r'(?:(?:avail(?:able)?|avl)(?:\.|\s+)?bal(?:ance)?|total\s+bal(?:ance)?|a\/c\s+bal(?:ance)?|bal(?:ance)?)\s*(?::|=|is)?\s*(?:Rs\.?|INR)?\s*([\d,]+(?:\.\d{2})?)',
     caseSensitive: false,
   );
 
@@ -59,15 +59,36 @@ class IciciParserStrategy implements BankParserStrategy {
     caseSensitive: false,
   );
 
+  // Info Transfer Target: Captures text following "Info" (e.g. NEFT, IMPS, RTGS, UPI)
+  // e.g. "Info NEFT-CITINXXXXXXXXXXX-JOHN DOE. Available Balance..." -> "NEFT-CITINXXXXXXXXXXX-JOHN DOE"
+  static final RegExp _infoPayeeRegex = RegExp(
+    r'\b(?:info|inf)\s*[:*]?\s*([A-Za-z0-9\s&_/-]+?)(?:\.|\s+Available|\s+Avl|\s+Total|\s*$)',
+    caseSensitive: false,
+  );
+
+  // Credit Sender Target: Captures sender after "from" in credit SMS
+  // e.g. "Acct XXXX is credited with Rs 140.00 on 20-Aug-26 from AYUSH SINGH. UPI:XXXX-ICICI Bank." -> AYUSH SINGH
+  static final RegExp _fromSenderRegex = RegExp(
+    r'\bfrom\s+(?!a\/c|acct|account|card\b)([A-Za-z0-9\s&]+?)(?:\.|\s+via|\s+UPI|\s+on|\s*$)',
+    caseSensitive: false,
+  );
+
   // Fallback Payee Target: Captures text after "paid to", "at", or "trf to"
   static final RegExp _fallbackPayeeRegex = RegExp(
-    r'(?:paid to|at|trf to|sent to)\s+([A-Za-z0-9\s&]+?)(?:\.|\s+via|\s+UPI|\s+on|\s*$)',
+    r'(?:paid to|at|trf to|sent to|transfer to)\s+([A-Za-z0-9\s&]+?)(?:\.|\s+via|\s+UPI|\s+on|\s*$)',
+    caseSensitive: false,
+  );
+
+  // Credit / Transfer Source Target: Captures text after "by"
+  // e.g. "credited with Rs 75,000.00 on 20-Aug-26 by salary transfer." -> salary transfer
+  static final RegExp _byPayeeRegex = RegExp(
+    r'\bby\s+(?!rs\.?|inr|a\/c|acct|account|card\b)([A-Za-z0-9\s&]+?)(?:\.|\s+via|\s+UPI|\s+on|\s*$)',
     caseSensitive: false,
   );
 
   // P2P & Merchant Detection Signals
   static final RegExp _p2pSignalRegex = RegExp(
-    r'\b(?:trf to|sent to|vpa|transfer to)\b',
+    r'\b(?:trf to|sent to|vpa|transfer to|neft|imps|rtgs)\b|\bfrom\s+(?!a\/c|acct|account|card\b)',
     caseSensitive: false,
   );
 
@@ -172,16 +193,34 @@ class IciciParserStrategy implements BankParserStrategy {
   }
 
   String _extractRawPayee(String body) {
-    // Primary ICICI Pattern Match
+    // Primary ICICI Pattern Match (e.g. "; SWIGGY credited." or "; Uber debited.")
     final primaryMatch = _iciciPayeeRegex.firstMatch(body);
     if (primaryMatch != null && primaryMatch.group(1) != null) {
       return primaryMatch.group(1)!.trim();
     }
 
-    // Secondary Generic Match
+    // Info Transfer Match (e.g. "Info NEFT-CITINXXXXXXXXXXX-JOHN DOE." or "Info IMPS-123456-RAHUL SHARMA")
+    final infoMatch = _infoPayeeRegex.firstMatch(body);
+    if (infoMatch != null && infoMatch.group(1) != null) {
+      return infoMatch.group(1)!.trim();
+    }
+
+    // Sender extraction for credit transactions (e.g. "from AYUSH SINGH. UPI:XXXX-ICICI Bank.")
+    final fromSenderMatch = _fromSenderRegex.firstMatch(body);
+    if (fromSenderMatch != null && fromSenderMatch.group(1) != null) {
+      return fromSenderMatch.group(1)!.trim();
+    }
+
+    // Secondary Generic Match (e.g. "paid to Zomato", "at Starbucks Cafe", "trf to Rahul Sharma")
     final fallbackMatch = _fallbackPayeeRegex.firstMatch(body);
     if (fallbackMatch != null && fallbackMatch.group(1) != null) {
       return fallbackMatch.group(1)!.trim();
+    }
+
+    // Transfer Source Match (e.g. "by salary transfer", "by Rahul Sharma")
+    final byMatch = _byPayeeRegex.firstMatch(body);
+    if (byMatch != null && byMatch.group(1) != null) {
+      return byMatch.group(1)!.trim();
     }
 
     return 'Unknown Payee';
@@ -190,13 +229,38 @@ class IciciParserStrategy implements BankParserStrategy {
   String _cleanPayee(String raw) {
     String text = raw
         .replaceAll(
-          RegExp(r'^(UPI:|INFO\*|REF:|ORDER:)', caseSensitive: false),
+          RegExp(
+            r'^(?:UPI:|INFO\*|INFO\s+|REF:|ORDER:|INF/)',
+            caseSensitive: false,
+          ),
           '',
         )
         .trim();
 
-    // Standardize casing to Title Case (e.g., SWIGGY -> Swiggy)
-    if (text.isNotEmpty && text == text.toUpperCase()) {
+    // Extract sender/payee name from NEFT/RTGS/IMPS/UPI structured strings
+    // e.g. "NEFT-CITIN1234567890-JOHN DOE" -> "JOHN DOE"
+    // e.g. "INF/NEFT/123456/ACME CORP" -> "ACME CORP"
+    final neftStructuredRegex = RegExp(
+      r'^(?:NEFT|RTGS|IMPS|UPI|INF|IFT|TPT|CMS)[-/](?:[A-Za-z0-9]+)[-/](.+)$',
+      caseSensitive: false,
+    );
+    final neftMatch = neftStructuredRegex.firstMatch(text);
+    if (neftMatch != null && neftMatch.group(1) != null) {
+      text = neftMatch.group(1)!.trim();
+    } else {
+      // Single-hyphen e.g. "NEFT-JOHN DOE"
+      final neftSimpleRegex = RegExp(
+        r'^(?:NEFT|RTGS|IMPS|UPI|INF|IFT|TPT|CMS)[-/](.+)$',
+        caseSensitive: false,
+      );
+      final simpleMatch = neftSimpleRegex.firstMatch(text);
+      if (simpleMatch != null && simpleMatch.group(1) != null) {
+        text = simpleMatch.group(1)!.trim();
+      }
+    }
+
+    // Standardize casing to Title Case (e.g., SWIGGY -> Swiggy, salary transfer -> Salary Transfer)
+    if (text.isNotEmpty && (text == text.toUpperCase() || text == text.toLowerCase())) {
       return text
           .split(' ')
           .map((word) {

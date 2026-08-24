@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
 import 'package:xbudget/core/di/injection_container.dart';
+import 'package:xbudget/features/transactions/presentation/widgets/transaction_tile.dart';
 import 'package:xbudget/main.dart';
 
 void main() {
@@ -32,7 +33,7 @@ void main() {
     expect(find.text('Last 10 Expenses'), findsOneWidget);
 
     // Verify Bottom Navigation Bar items
-    expect(find.text('Expenses'), findsOneWidget);
+    expect(find.text('Transactions'), findsOneWidget);
     expect(find.text('HOME'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
   });
@@ -46,8 +47,8 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Tap "Expenses" nav item
-    await tester.tap(find.text('Expenses'));
+    // Tap "Transactions" nav item
+    await tester.tap(find.text('Transactions'));
     await tester.pumpAndSettle();
     expect(find.text('All Expenses & Transactions'), findsOneWidget);
 
@@ -242,5 +243,69 @@ void main() {
 
     // Verify balance is increased: 10000 + 5000 = 15000.00
     expect(find.text('₹15000.00'), findsOneWidget);
+  });
+
+  testWidgets('xBudget real-time category change reflects immediately in UI without refresh',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await initDependencies(mockPrefs: prefs);
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    // 1. Add a transaction via FAB
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    // Fill Merchant: "Starbucks"
+    await tester.enterText(find.byType(TextField).at(1), 'Starbucks');
+    await tester.pumpAndSettle();
+
+    // Fill Amount: "350"
+    await tester.enterText(find.byType(TextField).first, '350');
+    await tester.pumpAndSettle();
+
+    // Tap "Record Expense"
+    await tester.ensureVisible(find.text('Record Expense'));
+    await tester.tap(find.text('Record Expense'));
+    await tester.pumpAndSettle();
+
+    // 2. Navigate to Transactions Tab
+    await tester.tap(find.text('Transactions'));
+    await tester.pumpAndSettle();
+
+    // Verify the transaction is visible with initial category "Food & Dining"
+    final starbucksTile = find.ancestor(
+      of: find.text('Starbucks'),
+      matching: find.byType(TransactionTile),
+    );
+    expect(starbucksTile, findsOneWidget);
+    expect(
+      find.descendant(of: starbucksTile, matching: find.textContaining('Food & Dining •')),
+      findsOneWidget,
+    );
+
+    // 3. Tap on the transaction to open the bottom sheet
+    await tester.tap(find.text('Starbucks'));
+    await tester.pumpAndSettle();
+
+    // Bottom sheet is visible with categories
+    expect(find.text('Change Category:'), findsOneWidget);
+
+    // 4. Tap "Shopping" category chip
+    await tester.tap(find.text('Shopping'));
+    await tester.pumpAndSettle();
+
+    // 5. Verify the modal closed and the category updated immediately to "Shopping" in real-time
+    expect(find.text('Change Category:'), findsNothing);
+    expect(
+      find.descendant(of: starbucksTile, matching: find.textContaining('Shopping •')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: starbucksTile, matching: find.textContaining('Food & Dining •')),
+      findsNothing,
+    );
   });
 }

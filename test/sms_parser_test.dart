@@ -126,7 +126,7 @@ void main() {
       expect(result.isP2P, isFalse);
     });
 
-    test('should parse ICICI credit income transaction', () {
+    test('should parse ICICI credit income transaction with salary transfer', () {
       const body =
           'Your A/c XX123 is credited with Rs 50,000.00 on 20-Aug-26 by salary transfer. Avl Bal Rs 75,000.00';
 
@@ -134,7 +134,94 @@ void main() {
 
       expect(result, isNotNull);
       expect(result!.amount, equals(50000.00));
+      expect(result.merchant, equals('Salary Transfer'));
       expect(result.transactionType, equals('income'));
+      expect(result.balance, equals(75000.00));
+    });
+
+    test('should parse ICICI credit SMS from person via UPI', () {
+      const sender = 'VM-ICICIB';
+      const body =
+          'Dear Customer, Acct XXXX is credited with Rs 140.00 on 20-Aug-26 from AYUSH SINGH. UPI:XXXX-ICICI Bank.';
+
+      expect(strategy.isEligible(sender, body), isTrue);
+
+      final result = strategy.parse(body, testDate);
+
+      expect(result, isNotNull);
+      expect(result!.amount, equals(140.00));
+      expect(result.merchant, equals('Ayush Singh'));
+      expect(result.transactionType, equals('income'));
+      expect(result.isP2P, isTrue);
+      expect(result.date, equals(testDate));
+    });
+
+    test('should parse ICICI credit SMS from person with generic sender', () {
+      const sender = 'AD-BANK';
+      const body =
+          'Dear Customer, Acct 1234 is credited with Rs 500.00 on 20-Aug-26 from RAHUL VERMA. UPI:123456-ICICI Bank.';
+
+      expect(strategy.isEligible(sender, body), isTrue);
+
+      final result = strategy.parse(body, testDate);
+
+      expect(result, isNotNull);
+      expect(result!.amount, equals(500.00));
+      expect(result.merchant, equals('Rahul Verma'));
+      expect(result.transactionType, equals('income'));
+      expect(result.isP2P, isTrue);
+    });
+
+    test('should parse ICICI NEFT credit SMS with sender and available balance', () {
+      const sender = 'VM-ICICIB';
+      const body =
+          'ICICI Bank Account XXXXX credited:Rs. 25,000.00 on 31-Jul-26. Info NEFT-CITIN1234567890-JOHN DOE. Available Balance is Rs. 45,000.00.';
+
+      expect(strategy.isEligible(sender, body), isTrue);
+
+      final result = strategy.parse(body, testDate);
+
+      expect(result, isNotNull);
+      expect(result!.amount, equals(25000.00));
+      expect(result.merchant, equals('John Doe'));
+      expect(result.transactionType, equals('income'));
+      expect(result.isP2P, isTrue);
+      expect(result.balance, equals(45000.00));
+      expect(result.date, equals(testDate));
+    });
+
+    test('should parse ICICI NEFT credit SMS with masked reference and Available Balance', () {
+      const sender = 'AD-BANK';
+      const body =
+          'ICICI Bank Account XXXXX credited:Rs. 1000.00 on 31-Jul-26. Info NEFT-CITINXXXXXXXXXXX-AYUSH SINGH. Available Balance is Rs. 5000.00.';
+
+      expect(strategy.isEligible(sender, body), isTrue);
+
+      final result = strategy.parse(body, testDate);
+
+      expect(result, isNotNull);
+      expect(result!.amount, equals(1000.00));
+      expect(result.merchant, equals('Ayush Singh'));
+      expect(result.transactionType, equals('income'));
+      expect(result.isP2P, isTrue);
+      expect(result.balance, equals(5000.00));
+    });
+
+    test('should parse ICICI IMPS credit SMS with Available Balance', () {
+      const sender = 'VM-ICICIB';
+      const body =
+          'ICICI Bank Account XXXXX credited:Rs. 3,500.00 on 31-Jul-26. Info IMPS-123456789012-RAHUL VERMA. Available Balance is Rs. 15,000.00.';
+
+      expect(strategy.isEligible(sender, body), isTrue);
+
+      final result = strategy.parse(body, testDate);
+
+      expect(result, isNotNull);
+      expect(result!.amount, equals(3500.00));
+      expect(result.merchant, equals('Rahul Verma'));
+      expect(result.transactionType, equals('income'));
+      expect(result.isP2P, isTrue);
+      expect(result.balance, equals(15000.00));
     });
 
     test('should flag P2P transfer correctly', () {
@@ -145,6 +232,7 @@ void main() {
 
       expect(result, isNotNull);
       expect(result!.amount, equals(500.00));
+      expect(result.merchant, equals('Rahul Sharma'));
       expect(result.isP2P, isTrue);
     });
   });
