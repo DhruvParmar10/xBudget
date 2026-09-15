@@ -38,6 +38,12 @@ A privacy-focused, offline-first personal budgeting and expense tracking applica
 
 ---
 
+<p align="center">
+  <img src="assets/images/dashboard.png" alt="Dashboard" width="300" />
+  &nbsp;&nbsp;
+  <img src="assets/images/balance_modal.png" alt="Balance Modal" width="300" />
+</p>
+
 ## Table of Contents
 
 - [Features](#features)
@@ -187,15 +193,6 @@ Follow these steps to set up the development environment and run **xBudget** loc
 - Tap **Connect Google Account** on the Google Sheets card.
 - Tap **Sync to Google Sheets** to export your transactions.
 - A dedicated spreadsheet is automatically created/updated in your Google Drive with month-wise tabs and an analytics dashboard with embedded pie charts.
-
-### Screenshots
-
-To add screenshots, place image files in `assets/images/` and reference them:
-
-```md
-![Dashboard](assets/images/dashboard.png)
-![Balance Modal](assets/images/balance_modal.png)
-```
 
 ---
 

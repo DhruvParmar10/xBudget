@@ -5,8 +5,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:http/http.dart' as http;
+import 'package:xbudget/core/utils/cycle_date_util.dart';
 import 'package:xbudget/features/transactions/domain/entities/budget_category.dart';
 import 'package:xbudget/features/transactions/domain/entities/transaction_entity.dart';
+
+export 'package:xbudget/core/utils/cycle_date_util.dart' show CycleMode;
 
 /// Result summary returned after a Google Sheets synchronization run.
 class GoogleSheetsSyncSummary {
@@ -86,25 +89,41 @@ class GoogleSheetsService {
     return '${monthNames[month - 1]} $year';
   }
 
-  /// Returns the effective MonthKey for a date, mapping any transaction
-  /// occurring on the final day of a month into the following month's cycle
-  /// (e.g., Aug 31 -> September 2026, Sept 30 -> October 2026).
-  static MonthKey getEffectiveMonthKey(DateTime date) {
-    final lastDay = DateTime(date.year, date.month + 1, 0).day;
-    if (date.day == lastDay) {
-      final nextMonth = DateTime(date.year, date.month + 1, 1);
-      return MonthKey(nextMonth.year, nextMonth.month);
-    }
-    return MonthKey(date.year, date.month);
+  /// Returns the effective MonthKey for a date according to the user's billing cycle configuration.
+  /// If the cycle spans across calendar months (e.g., offset 31st to 30th, or 25th to 24th),
+  /// the tab is mapped to the budget month being funded (the cycle's end month).
+  static MonthKey getEffectiveMonthKey(
+    DateTime date, {
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
+  }) {
+    final range = CycleDateUtil.getCycleRange(
+      now: date,
+      mode: cycleMode,
+      startDay: cycleStartDay,
+      endDay: cycleEndDay,
+    );
+    return MonthKey(range.end.year, range.end.month);
   }
 
-  /// Returns the cycle date range for [monthKey] under the last-day shift rule
-  /// (starts on the last day of previous month, ends on the day before last day of this month).
-  static ({DateTime start, DateTime end}) getCycleDateRangeForMonth(MonthKey monthKey) {
-    final start = DateTime(monthKey.year, monthKey.month, 0);
-    final lastDayThisMonth = DateTime(monthKey.year, monthKey.month + 1, 0).day;
-    final end = DateTime(monthKey.year, monthKey.month, lastDayThisMonth - 1);
-    return (start: start, end: end);
+  /// Returns the cycle date range for [monthKey] under the configured billing cycle.
+  static ({DateTime start, DateTime end}) getCycleDateRangeForMonth(
+    MonthKey monthKey, {
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
+  }) {
+    final refDay = (cycleMode == CycleMode.custom && cycleStartDay < cycleEndDay)
+        ? CycleDateUtil.clampDay(monthKey.year, monthKey.month, cycleStartDay)
+        : 1;
+    final refDate = DateTime(monthKey.year, monthKey.month, refDay);
+    return CycleDateUtil.getCycleRange(
+      now: refDate,
+      mode: cycleMode,
+      startDay: cycleStartDay,
+      endDay: cycleEndDay,
+    );
   }
 
   static const List<String> requiredScopes = [
@@ -246,6 +265,9 @@ class GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     try {
       final apiReady = await _initApis();
@@ -267,6 +289,9 @@ class GoogleSheetsService {
               currentBalance: currentBalance,
               cycleStartDate: cycleStartDate,
               cycleEndDate: cycleEndDate,
+              cycleMode: cycleMode,
+              cycleStartDay: cycleStartDay,
+              cycleEndDay: cycleEndDay,
             );
             return _spreadsheetId;
           }
@@ -296,6 +321,9 @@ class GoogleSheetsService {
             currentBalance: currentBalance,
             cycleStartDate: cycleStartDate,
             cycleEndDate: cycleEndDate,
+            cycleMode: cycleMode,
+            cycleStartDay: cycleStartDay,
+            cycleEndDay: cycleEndDay,
           );
         }
         return _spreadsheetId;
@@ -328,6 +356,9 @@ class GoogleSheetsService {
         currentBalance: currentBalance,
         cycleStartDate: cycleStartDate,
         cycleEndDate: cycleEndDate,
+        cycleMode: cycleMode,
+        cycleStartDay: cycleStartDay,
+        cycleEndDay: cycleEndDay,
       );
 
       return _spreadsheetId;
@@ -351,6 +382,9 @@ class GoogleSheetsService {
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
     List<TransactionEntity>? transactions,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     final ids = await _ensureMonthSheetsStructure(
       spreadsheetId,
@@ -358,6 +392,9 @@ class GoogleSheetsService {
       currentBalance: currentBalance,
       cycleStartDate: cycleStartDate,
       cycleEndDate: cycleEndDate,
+      cycleMode: cycleMode,
+      cycleStartDay: cycleStartDay,
+      cycleEndDay: cycleEndDay,
     );
     final firstId = ids.isNotEmpty ? ids.values.first : 0;
     return (dashboardSheetId: firstId, transactionsSheetId: firstId);
@@ -372,20 +409,33 @@ class GoogleSheetsService {
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
     DateTime? syncTime,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     final now = syncTime ?? DateTime.now();
     final Map<String, int> monthSheetIds = {};
 
     try {
-      // 1. Partition transactions by effective MonthKey (last day of month -> next month)
+      // 1. Partition transactions by effective MonthKey based on user's billing cycle
       final Map<MonthKey, List<TransactionEntity>> grouped = {};
       for (final t in transactions) {
-        final key = getEffectiveMonthKey(t.date);
+        final key = getEffectiveMonthKey(
+          t.date,
+          cycleMode: cycleMode,
+          cycleStartDay: cycleStartDay,
+          cycleEndDay: cycleEndDay,
+        );
         grouped.putIfAbsent(key, () => []).add(t);
       }
 
       // Always guarantee that the current active month tab is present
-      final currentMonthKey = getEffectiveMonthKey(now);
+      final currentMonthKey = getEffectiveMonthKey(
+        now,
+        cycleMode: cycleMode,
+        cycleStartDay: cycleStartDay,
+        cycleEndDay: cycleEndDay,
+      );
       grouped.putIfAbsent(currentMonthKey, () => []);
 
       // Sort month keys descending (newest month first)
@@ -487,6 +537,9 @@ class GoogleSheetsService {
           cycleEndDate: cycleEndDate,
           syncTime: now,
           sheetIndex: i,
+          cycleMode: cycleMode,
+          cycleStartDay: cycleStartDay,
+          cycleEndDay: cycleEndDay,
         );
       }
 
@@ -546,13 +599,26 @@ class GoogleSheetsService {
     DateTime? cycleEndDate,
     required DateTime syncTime,
     required int sheetIndex,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     final title = monthKey.title;
-    final currentEffectiveMonthKey = getEffectiveMonthKey(syncTime);
+    final currentEffectiveMonthKey = getEffectiveMonthKey(
+      syncTime,
+      cycleMode: cycleMode,
+      cycleStartDay: cycleStartDay,
+      cycleEndDay: cycleEndDay,
+    );
     final isCurrentMonth = (currentEffectiveMonthKey == monthKey);
 
-    // Salary-aligned cycle: starts on the last day of previous month, ends on the day before the last day of this month
-    final defaultCycleRange = getCycleDateRangeForMonth(monthKey);
+    // Bill-cycle-aligned dates for this month
+    final defaultCycleRange = getCycleDateRangeForMonth(
+      monthKey,
+      cycleMode: cycleMode,
+      cycleStartDay: cycleStartDay,
+      cycleEndDay: cycleEndDay,
+    );
     final periodStart =
         (isCurrentMonth && cycleStartDate != null) ? cycleStartDate : defaultCycleRange.start;
     final periodEnd =
@@ -1233,16 +1299,27 @@ class GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     try {
       final txnDate = DateTime.tryParse(date) ?? DateTime.now();
-      final monthKey = getEffectiveMonthKey(txnDate);
+      final monthKey = getEffectiveMonthKey(
+        txnDate,
+        cycleMode: cycleMode,
+        cycleStartDay: cycleStartDay,
+        cycleEndDay: cycleEndDay,
+      );
       final monthSheetTitle = monthKey.title;
 
       final sheetId = await initSheet(
         currentBalance: currentBalance,
         cycleStartDate: cycleStartDate,
         cycleEndDate: cycleEndDate,
+        cycleMode: cycleMode,
+        cycleStartDay: cycleStartDay,
+        cycleEndDay: cycleEndDay,
       );
       if (sheetId == null || _sheetsApi == null) {
         developer.log(
@@ -1289,6 +1366,9 @@ class GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     final now = DateTime.now();
 
@@ -1297,6 +1377,9 @@ class GoogleSheetsService {
         currentBalance: currentBalance,
         cycleStartDate: cycleStartDate,
         cycleEndDate: cycleEndDate,
+        cycleMode: cycleMode,
+        cycleStartDay: cycleStartDay,
+        cycleEndDay: cycleEndDay,
       );
       if (sheetId == null || _sheetsApi == null) {
         return GoogleSheetsSyncSummary(
@@ -1315,6 +1398,9 @@ class GoogleSheetsService {
         cycleStartDate: cycleStartDate,
         cycleEndDate: cycleEndDate,
         syncTime: now,
+        cycleMode: cycleMode,
+        cycleStartDay: cycleStartDay,
+        cycleEndDay: cycleEndDay,
       );
 
       return GoogleSheetsSyncSummary(

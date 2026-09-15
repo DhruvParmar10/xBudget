@@ -15,6 +15,9 @@ class FakeGoogleSheetsService extends GoogleSheetsService {
   double? lastPassedBalance;
   DateTime? lastPassedCycleStart;
   DateTime? lastPassedCycleEnd;
+  CycleMode? lastPassedCycleMode;
+  int? lastPassedCycleStartDay;
+  int? lastPassedCycleEndDay;
   GoogleSheetsSyncSummary? summaryToReturn;
 
   @override
@@ -26,11 +29,17 @@ class FakeGoogleSheetsService extends GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     syncCalled = true;
     lastPassedBalance = currentBalance;
     lastPassedCycleStart = cycleStartDate;
     lastPassedCycleEnd = cycleEndDate;
+    lastPassedCycleMode = cycleMode;
+    lastPassedCycleStartDay = cycleStartDay;
+    lastPassedCycleEndDay = cycleEndDay;
     return summaryToReturn ??
         GoogleSheetsSyncSummary(
           totalLocalTransactions: transactions.length,
@@ -116,6 +125,21 @@ void main() {
       expect(fakeService.lastPassedBalance, closeTo(15204.93, 0.01));
       expect(fakeService.lastPassedCycleStart, isNotNull);
       expect(fakeService.lastPassedCycleEnd, isNotNull);
+    });
+
+    test('passes user selected bill cycle preferences (CycleMode, startDay, endDay) to GoogleSheetsService', () async {
+      await preferences.setCycleConfig(
+        mode: CycleMode.custom,
+        startDay: 25,
+        endDay: 24,
+      );
+
+      final result = await useCase(const NoParams());
+
+      expect(result.isSuccess, isTrue);
+      expect(fakeService.lastPassedCycleMode, equals(CycleMode.custom));
+      expect(fakeService.lastPassedCycleStartDay, equals(25));
+      expect(fakeService.lastPassedCycleEndDay, equals(24));
     });
 
     test('handles failure without updating invalid preferences', () async {

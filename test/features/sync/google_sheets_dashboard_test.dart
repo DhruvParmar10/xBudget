@@ -27,6 +27,9 @@ class MockTestGoogleSheetsService extends GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     syncCalled = true;
     capturedCurrentBalance = currentBalance;

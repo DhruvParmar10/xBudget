@@ -60,6 +60,9 @@ class MockGoogleSheetsService extends GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     return mockSheetId ?? 'sheet-abc';
   }
@@ -70,6 +73,9 @@ class MockGoogleSheetsService extends GoogleSheetsService {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    CycleMode cycleMode = CycleMode.offset31To30,
+    int cycleStartDay = 31,
+    int cycleEndDay = 30,
   }) async {
     return mockSyncSummary ??
         GoogleSheetsSyncSummary(

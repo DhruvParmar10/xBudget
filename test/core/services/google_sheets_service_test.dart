@@ -193,18 +193,79 @@ void main() {
     test('getCycleDateRangeForMonth computes salary cycle bounds', () {
       // September 2026 cycle: Aug 31 to Sept 29
       final septCycle = GoogleSheetsService.getCycleDateRangeForMonth(const MonthKey(2026, 9));
-      expect(septCycle.start, equals(DateTime(2026, 8, 31)));
-      expect(septCycle.end, equals(DateTime(2026, 9, 29)));
+      expect(septCycle.start, equals(DateTime(2026, 8, 31, 0, 0, 0)));
+      expect(septCycle.end, equals(DateTime(2026, 9, 29, 23, 59, 59, 999)));
 
       // August 2026 cycle: Jul 31 to Aug 30
       final augCycle = GoogleSheetsService.getCycleDateRangeForMonth(const MonthKey(2026, 8));
-      expect(augCycle.start, equals(DateTime(2026, 7, 31)));
-      expect(augCycle.end, equals(DateTime(2026, 8, 30)));
+      expect(augCycle.start, equals(DateTime(2026, 7, 31, 0, 0, 0)));
+      expect(augCycle.end, equals(DateTime(2026, 8, 30, 23, 59, 59, 999)));
 
       // January 2026 cycle: Dec 31, 2025 to Jan 30, 2026
       final janCycle = GoogleSheetsService.getCycleDateRangeForMonth(const MonthKey(2026, 1));
-      expect(janCycle.start, equals(DateTime(2025, 12, 31)));
-      expect(janCycle.end, equals(DateTime(2026, 1, 30)));
+      expect(janCycle.start, equals(DateTime(2025, 12, 31, 0, 0, 0)));
+      expect(janCycle.end, equals(DateTime(2026, 1, 30, 23, 59, 59, 999)));
+    });
+
+    test('getEffectiveMonthKey with CycleMode.calendar keeps dates in their calendar month', () {
+      // Under calendar mode, Aug 31 is still August 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(
+          DateTime(2026, 8, 31),
+          cycleMode: CycleMode.calendar,
+        ),
+        equals(const MonthKey(2026, 8)),
+      );
+
+      // Sept 1 is September 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(
+          DateTime(2026, 9, 1),
+          cycleMode: CycleMode.calendar,
+        ),
+        equals(const MonthKey(2026, 9)),
+      );
+
+      final septRange = GoogleSheetsService.getCycleDateRangeForMonth(
+        const MonthKey(2026, 9),
+        cycleMode: CycleMode.calendar,
+      );
+      expect(septRange.start, equals(DateTime(2026, 9, 1, 0, 0, 0)));
+      expect(septRange.end, equals(DateTime(2026, 9, 30, 23, 59, 59, 999)));
+    });
+
+    test('getEffectiveMonthKey with CycleMode.custom (25th to 24th) maps correctly', () {
+      // Aug 25 (after start day) -> belongs to September 2026 cycle
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(
+          DateTime(2026, 8, 25),
+          cycleMode: CycleMode.custom,
+          cycleStartDay: 25,
+          cycleEndDay: 24,
+        ),
+        equals(const MonthKey(2026, 9)),
+      );
+
+      // Aug 24 (before start day) -> belongs to August 2026 cycle
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(
+          DateTime(2026, 8, 24),
+          cycleMode: CycleMode.custom,
+          cycleStartDay: 25,
+          cycleEndDay: 24,
+        ),
+        equals(const MonthKey(2026, 8)),
+      );
+
+      // September range for 25th-24th cycle
+      final septRange = GoogleSheetsService.getCycleDateRangeForMonth(
+        const MonthKey(2026, 9),
+        cycleMode: CycleMode.custom,
+        cycleStartDay: 25,
+        cycleEndDay: 24,
+      );
+      expect(septRange.start, equals(DateTime(2026, 8, 25, 0, 0, 0)));
+      expect(septRange.end, equals(DateTime(2026, 9, 24, 23, 59, 59, 999)));
     });
   });
 }

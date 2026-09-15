@@ -53,6 +53,9 @@ class SyncToGoogleSheetsUseCase
       currentBalance: currentBalance,
       cycleStartDate: cycleRange.start,
       cycleEndDate: cycleRange.end,
+      cycleMode: preferences.cycleMode,
+      cycleStartDay: preferences.cycleStartDay,
+      cycleEndDay: preferences.cycleEndDay,
     );
 
     // 5. Update cached preferences if successful
