@@ -125,6 +125,7 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
       googleSheetsService: sl(),
       repository: sl(),
       preferences: sl(),
+      getBalanceUseCase: sl(),
     ),
   );
 

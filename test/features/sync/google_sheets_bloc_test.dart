@@ -55,12 +55,22 @@ class MockGoogleSheetsService extends GoogleSheetsService {
   }
 
   @override
-  Future<String?> initSheet({String sheetTitle = GoogleSheetsService.defaultSpreadsheetTitle}) async {
+  Future<String?> initSheet({
+    String sheetTitle = GoogleSheetsService.defaultSpreadsheetTitle,
+    double? currentBalance,
+    DateTime? cycleStartDate,
+    DateTime? cycleEndDate,
+  }) async {
     return mockSheetId ?? 'sheet-abc';
   }
 
   @override
-  Future<GoogleSheetsSyncSummary> syncTransactions(List<TransactionEntity> transactions) async {
+  Future<GoogleSheetsSyncSummary> syncTransactions(
+    List<TransactionEntity> transactions, {
+    double? currentBalance,
+    DateTime? cycleStartDate,
+    DateTime? cycleEndDate,
+  }) async {
     return mockSyncSummary ??
         GoogleSheetsSyncSummary(
           totalLocalTransactions: transactions.length,

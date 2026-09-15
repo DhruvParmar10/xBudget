@@ -12,6 +12,9 @@ import 'package:xbudget/features/transactions/domain/entities/transaction_entity
 
 class FakeGoogleSheetsService extends GoogleSheetsService {
   bool syncCalled = false;
+  double? lastPassedBalance;
+  DateTime? lastPassedCycleStart;
+  DateTime? lastPassedCycleEnd;
   GoogleSheetsSyncSummary? summaryToReturn;
 
   @override
@@ -19,9 +22,15 @@ class FakeGoogleSheetsService extends GoogleSheetsService {
 
   @override
   Future<GoogleSheetsSyncSummary> syncTransactions(
-    List<TransactionEntity> transactions,
-  ) async {
+    List<TransactionEntity> transactions, {
+    double? currentBalance,
+    DateTime? cycleStartDate,
+    DateTime? cycleEndDate,
+  }) async {
     syncCalled = true;
+    lastPassedBalance = currentBalance;
+    lastPassedCycleStart = cycleStartDate;
+    lastPassedCycleEnd = cycleEndDate;
     return summaryToReturn ??
         GoogleSheetsSyncSummary(
           totalLocalTransactions: transactions.length,
@@ -80,6 +89,33 @@ void main() {
       expect(preferences.googleSheetId, equals('test-sheet-id-123'));
       expect(preferences.lastGoogleSheetSyncTimestamp, isNotNull);
       expect(preferences.googleAccountEmail, equals('testuser@gmail.com'));
+    });
+
+    test('passes dynamically calculated current balance and cycle dates to GoogleSheetsService during sync', () async {
+      final baseDate = DateTime(2026, 8, 20, 10, 0);
+      await preferences.setCurrentBalance(20000.0, updatedAt: baseDate);
+
+      // Add expense after balanceUpdatedAt
+      final expenseTxn = TransactionModel(
+        id: 'txn-expense-1',
+        amount: 4795.07,
+        merchant: 'Shopping Mall',
+        transactionType: 'expense',
+        category: BudgetCategory.shopping,
+        isP2P: false,
+        date: DateTime(2026, 8, 21, 15, 0),
+        rawMessage: 'Rs 4795.07 debited',
+        createdAt: DateTime(2026, 8, 21, 15, 0),
+      );
+      await repository.saveTransactions([expenseTxn]);
+
+      final result = await useCase(const NoParams());
+
+      expect(result.isSuccess, isTrue);
+      // 20000.0 - 4795.07 = 15204.93
+      expect(fakeService.lastPassedBalance, closeTo(15204.93, 0.01));
+      expect(fakeService.lastPassedCycleStart, isNotNull);
+      expect(fakeService.lastPassedCycleEnd, isNotNull);
     });
 
     test('handles failure without updating invalid preferences', () async {
