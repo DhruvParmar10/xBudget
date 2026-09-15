@@ -9,6 +9,9 @@ import '../constants/app_preferences.dart';
 import '../utils/parsed_transaction.dart';
 import '../utils/sms_parser.dart';
 import '../utils/transaction_categorizer.dart';
+import 'package:xbudget/features/balance/data/models/balance_log_model.dart';
+import 'package:xbudget/features/balance/domain/entities/balance_log_entity.dart';
+import 'package:xbudget/features/balance/domain/repositories/balance_log_repository.dart';
 
 /// Summary returned after an SMS synchronization run.
 class SyncResult {
@@ -34,14 +37,17 @@ class SyncResult {
 class SmsSyncService {
   final TransactionRepository _repository;
   final AppPreferences _preferences;
+  final BalanceLogRepository? _balanceLogRepository;
   final SmsQuery _smsQuery;
 
   SmsSyncService({
     required TransactionRepository repository,
     required AppPreferences preferences,
+    BalanceLogRepository? balanceLogRepository,
     SmsQuery? smsQuery,
   })  : _repository = repository,
         _preferences = preferences,
+        _balanceLogRepository = balanceLogRepository,
         _smsQuery = smsQuery ?? SmsQuery();
 
   /// Performs SMS sync:
@@ -130,17 +136,9 @@ class SmsSyncService {
       // Bulk ingest with deduplication
       final newAdded = await _repository.saveTransactions(toSave);
 
-      // Auto-update current balance from latest SMS if applicable
+      // Auto-update current balance and log discrepancy from latest SMS if applicable
       if (latestParsedWithBalance != null && latestParsedWithBalance.balance != null) {
-        final manualUpdate = _preferences.balanceUpdatedAt;
-        final isManual = _preferences.balanceSource == 'manual';
-        if (manualUpdate == null || !isManual || latestParsedWithBalance.date.isAfter(manualUpdate)) {
-          await _preferences.setCurrentBalance(
-            latestParsedWithBalance.balance!,
-            source: 'sms',
-            updatedAt: latestParsedWithBalance.date,
-          );
-        }
+        await _recordSmsBalance(latestParsedWithBalance);
       }
 
       // Update sync timestamp
@@ -207,15 +205,7 @@ class SmsSyncService {
     final newAdded = await _repository.saveTransactions(toSave);
 
     if (latestParsedWithBalance != null && latestParsedWithBalance.balance != null) {
-      final manualUpdate = _preferences.balanceUpdatedAt;
-      final isManual = _preferences.balanceSource == 'manual';
-      if (manualUpdate == null || !isManual || latestParsedWithBalance.date.isAfter(manualUpdate)) {
-        await _preferences.setCurrentBalance(
-          latestParsedWithBalance.balance!,
-          source: 'sms',
-          updatedAt: latestParsedWithBalance.date,
-        );
-      }
+      await _recordSmsBalance(latestParsedWithBalance);
     }
 
     await _preferences.setLastSyncTimestamp(now);
@@ -225,6 +215,50 @@ class SmsSyncService {
       eligibleCount: eligibleCount,
       newTransactionsAdded: newAdded,
       syncTimestamp: now,
+    );
+  }
+
+  Future<void> _recordSmsBalance(ParsedTransaction parsed) async {
+    final smsBal = parsed.balance;
+    if (smsBal == null) return;
+
+    final manualUpdate = _preferences.balanceUpdatedAt;
+    final isManual = _preferences.balanceSource == 'manual';
+    if (manualUpdate != null && isManual && !parsed.date.isAfter(manualUpdate)) {
+      return;
+    }
+
+    if (_balanceLogRepository != null) {
+      final prevBal = _preferences.currentBalance ?? 0.0;
+      final discrepancy = smsBal - prevBal;
+      final isFirstTime = _preferences.currentBalance == null;
+
+      if (isFirstTime || discrepancy.abs() > 0.01) {
+        final id = BalanceLogModel.generateId(
+          timestamp: parsed.date,
+          adjustmentAmount: isFirstTime ? smsBal : discrepancy,
+          source: isFirstTime ? 'opening' : 'sms',
+        );
+        final log = BalanceLogEntity(
+          id: id,
+          timestamp: parsed.date,
+          previousBalance: prevBal,
+          adjustmentAmount: isFirstTime ? smsBal : discrepancy,
+          resultingBalance: smsBal,
+          source: isFirstTime ? 'opening' : 'sms',
+          note: isFirstTime
+              ? 'Opening Balance from SMS'
+              : 'SMS Sync Adjustment (${parsed.merchant.isNotEmpty ? parsed.merchant : "Bank SMS"})',
+          createdAt: DateTime.now(),
+        );
+        await _balanceLogRepository.addBalanceLog(log);
+      }
+    }
+
+    await _preferences.setCurrentBalance(
+      smsBal,
+      source: 'sms',
+      updatedAt: parsed.date,
     );
   }
 

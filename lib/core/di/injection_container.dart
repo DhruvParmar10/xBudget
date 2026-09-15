@@ -3,9 +3,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
 import 'package:xbudget/core/services/google_sheets_service.dart';
 import 'package:xbudget/core/services/sms_sync_service.dart';
+import 'package:xbudget/features/balance/data/datasources/balance_log_local_datasource.dart';
+import 'package:xbudget/features/balance/data/repositories/balance_log_repository_impl.dart';
+import 'package:xbudget/features/balance/domain/repositories/balance_log_repository.dart';
+import 'package:xbudget/features/balance/domain/usecases/add_balance_log_usecase.dart';
 import 'package:xbudget/features/balance/domain/usecases/clear_balance_usecase.dart';
+import 'package:xbudget/features/balance/domain/usecases/delete_balance_log_usecase.dart';
+import 'package:xbudget/features/balance/domain/usecases/get_balance_logs_usecase.dart';
 import 'package:xbudget/features/balance/domain/usecases/get_balance_usecase.dart';
 import 'package:xbudget/features/balance/domain/usecases/set_balance_usecase.dart';
+import 'package:xbudget/features/balance/domain/usecases/update_balance_log_usecase.dart';
 import 'package:xbudget/features/balance/presentation/bloc/balance_bloc.dart';
 import 'package:xbudget/features/sync/domain/usecases/clear_all_data_usecase.dart';
 import 'package:xbudget/features/sync/domain/usecases/google_auth_usecases.dart';
@@ -53,6 +60,14 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
     () => TransactionRepositoryImpl(sl()),
   );
 
+  sl.registerLazySingleton<BalanceLogLocalDataSource>(
+    () => BalanceLogLocalDataSourceImpl(sl()),
+  );
+
+  sl.registerLazySingleton<BalanceLogRepository>(
+    () => BalanceLogRepositoryImpl(localDataSource: sl()),
+  );
+
   // ---------------------------------------------------------------------------
   // Services
   // ---------------------------------------------------------------------------
@@ -60,6 +75,7 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
     () => SmsSyncService(
       repository: sl(),
       preferences: sl(),
+      balanceLogRepository: sl(),
     ),
   );
 
@@ -89,10 +105,25 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
     () => GetBalanceUseCase(
       preferences: sl(),
       repository: sl(),
+      balanceLogRepository: sl(),
     ),
   );
-  sl.registerLazySingleton(() => SetBalanceUseCase(sl()));
-  sl.registerLazySingleton(() => ClearBalanceUseCase(sl()));
+  sl.registerLazySingleton(
+    () => SetBalanceUseCase(
+      preferences: sl(),
+      balanceLogRepository: sl(),
+    ),
+  );
+  sl.registerLazySingleton(
+    () => ClearBalanceUseCase(
+      preferences: sl(),
+      balanceLogRepository: sl(),
+    ),
+  );
+  sl.registerLazySingleton(() => GetBalanceLogsUseCase(sl()));
+  sl.registerLazySingleton(() => AddBalanceLogUseCase(sl()));
+  sl.registerLazySingleton(() => UpdateBalanceLogUseCase(sl()));
+  sl.registerLazySingleton(() => DeleteBalanceLogUseCase(sl()));
 
   // ---------------------------------------------------------------------------
   // Use Cases - Sync & Google Sheets
@@ -150,6 +181,9 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
       getBalanceUseCase: sl(),
       setBalanceUseCase: sl(),
       clearBalanceUseCase: sl(),
+      addBalanceLogUseCase: sl(),
+      updateBalanceLogUseCase: sl(),
+      deleteBalanceLogUseCase: sl(),
     ),
   );
 

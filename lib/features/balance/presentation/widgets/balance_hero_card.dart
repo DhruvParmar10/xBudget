@@ -7,6 +7,7 @@ import 'package:xbudget/features/transactions/presentation/bloc/transaction_bloc
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_state.dart';
 import 'package:xbudget/features/balance/presentation/bloc/balance_bloc.dart';
 import 'package:xbudget/features/balance/presentation/bloc/balance_state.dart';
+import 'balance_history_sheet.dart';
 import 'note_balance_bottom_sheet.dart';
 
 class BalanceHeroCard extends StatelessWidget {
@@ -77,35 +78,74 @@ class BalanceHeroCard extends StatelessWidget {
                             ],
                           ],
                         ),
-                        InkWell(
-                          onTap: () => NoteBalanceBottomSheet.show(context),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.caramelOrange,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  currentBalance != null ? Icons.edit_outlined : Icons.add,
-                                  size: 13,
-                                  color: AppColors.cream,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  currentBalance != null ? 'Update' : 'Note Balance',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.cream,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (currentBalance != null) ...[
+                              InkWell(
+                                onTap: () => BalanceHistorySheet.show(context),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceLight,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.history,
+                                        size: 13,
+                                        color: AppColors.cream,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Logs',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.cream,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            InkWell(
+                              onTap: () => NoteBalanceBottomSheet.show(context),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.caramelOrange,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      currentBalance != null ? Icons.edit_outlined : Icons.add,
+                                      size: 13,
+                                      color: AppColors.cream,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      currentBalance != null ? 'Update' : 'Note Balance',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.cream,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -114,7 +154,13 @@ class BalanceHeroCard extends StatelessWidget {
 
                     // Big Current Balance Amount Display
                     GestureDetector(
-                      onTap: () => NoteBalanceBottomSheet.show(context),
+                      onTap: () {
+                        if (currentBalance != null) {
+                          BalanceHistorySheet.show(context);
+                        } else {
+                          NoteBalanceBottomSheet.show(context);
+                        }
+                      },
                       child: Text(
                         currentBalance != null
                             ? (currentBalance < 0
