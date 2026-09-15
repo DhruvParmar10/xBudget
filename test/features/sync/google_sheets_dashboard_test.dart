@@ -267,5 +267,132 @@ void main() {
       expect(dashboardRows.last[0], equals('Total Monthly Expenses'));
       expect(dashboardRows.last[1], equals('=SUM(B10:B${totalRowNum - 1})'));
     });
+
+    test('validates Monthwise sheet layout with Dashboard on top and Transactions below', () {
+      const monthTitle = 'September 2026';
+      final categories = BudgetCategory.values;
+
+      final List<List<Object>> sheetRows = [
+        // Row 1: Banner Title
+        ['xBudget Financial Dashboard - $monthTitle', '', '', '', '', '', ''],
+        // Row 2: Subtitle / Timestamp
+        ['Last Synced: 2026-09-16 01:16', '', '', '', '', '', ''],
+        // Row 3: Month Period
+        ['Month Period:', '2026-09-01', 'to', '2026-09-30', '', '', ''],
+        // Row 4: Monthly KPI Headers
+        [
+          'Current Balance',
+          '',
+          'Monthly Income',
+          '',
+          'Monthly Expense',
+          '',
+          'Net Monthly Flow',
+        ],
+        // Row 5: Monthly KPI Values pointing to transactions starting row 27
+        [
+          10217.84,
+          '',
+          '=SUMIF(D27:D, "income", C27:C)',
+          '',
+          '=SUMIF(D27:D, "expense", C27:C)',
+          '',
+          '=C5-E5',
+        ],
+        // Row 6: Activity KPI Headers
+        ['', '', 'Total Transactions', '', 'Expense Count', '', 'Income Count'],
+        // Row 7: Activity KPI Values
+        [
+          '',
+          '',
+          '=COUNTA(G27:G)',
+          '',
+          '=COUNTIF(D27:D, "expense")',
+          '',
+          '=COUNTIF(D27:D, "income")',
+        ],
+        // Row 8: Spacer
+        ['', '', '', '', '', '', ''],
+        // Row 9: Category Breakdown Header
+        ['Monthly Expense Category', 'Spend Amount', '', '', '', '', ''],
+      ];
+
+      for (int i = 0; i < categories.length; i++) {
+        final rowNum = 10 + i;
+        final cat = categories[i];
+        sheetRows.add([
+          cat.displayName,
+          '=SUMIFS(C\$27:C, B\$27:B, A$rowNum, D\$27:D, "expense")',
+          '',
+          '',
+          '',
+          '',
+          '',
+        ]);
+      }
+
+      final totalRowNum = 10 + categories.length;
+      sheetRows.add([
+        'Total Monthly Expenses',
+        '=SUM(B10:B${totalRowNum - 1})',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ]);
+
+      // Spacers and section headers
+      sheetRows.add(['', '', '', '', '', '', '']);
+      sheetRows.add(['', '', '', '', '', '', '']);
+      sheetRows.add(['$monthTitle Transactions', '', '', '', '', '', '']);
+      sheetRows.add([
+        'Date',
+        'Category',
+        'Amount',
+        'Type',
+        'Merchant',
+        'Notes',
+        'Transaction ID',
+      ]);
+
+      // Row 27: Sample transaction
+      sheetRows.add([
+        '2026-09-15',
+        'Food & Dining',
+        450.0,
+        'expense',
+        'Zomato',
+        'Dinner',
+        'txn-999',
+      ]);
+
+      // Validations
+      expect(sheetRows[0][0], equals('xBudget Financial Dashboard - September 2026'));
+      expect(sheetRows[2][0], equals('Month Period:'));
+      expect(sheetRows[3][0], equals('Current Balance'));
+      expect(sheetRows[4][2], equals('=SUMIF(D27:D, "income", C27:C)'));
+      expect(sheetRows[4][4], equals('=SUMIF(D27:D, "expense", C27:C)'));
+      expect(sheetRows[4][6], equals('=C5-E5'));
+      expect(sheetRows[6][2], equals('=COUNTA(G27:G)'));
+      expect(sheetRows[6][4], equals('=COUNTIF(D27:D, "expense")'));
+      expect(sheetRows[6][6], equals('=COUNTIF(D27:D, "income")'));
+
+      // Category breakdown formulas
+      expect(sheetRows[9][0], equals('Food & Dining'));
+      expect(sheetRows[9][1], equals(r'=SUMIFS(C$27:C, B$27:B, A10, D$27:D, "expense")'));
+
+      // Transactions section below dashboard
+      expect(sheetRows[24][0], equals('September 2026 Transactions'));
+      expect(sheetRows[25][0], equals('Date'));
+      expect(sheetRows[25][1], equals('Category'));
+      expect(sheetRows[25][2], equals('Amount'));
+      expect(sheetRows[25][6], equals('Transaction ID'));
+
+      // Data row 27
+      expect(sheetRows[26][0], equals('2026-09-15'));
+      expect(sheetRows[26][2], equals(450.0));
+      expect(sheetRows[26][6], equals('txn-999'));
+    });
   });
 }

@@ -27,6 +27,36 @@ class GoogleSheetsSyncSummary {
   bool get isSuccess => errorMessage == null;
 }
 
+/// Represents a Year and Month grouping key for monthwise sheet tabs (e.g. "September 2026").
+class MonthKey implements Comparable<MonthKey> {
+  final int year;
+  final int month;
+
+  const MonthKey(this.year, this.month);
+
+  String get title => GoogleSheetsService.getMonthSheetTitle(year, month);
+
+  @override
+  int compareTo(MonthKey other) {
+    if (year != other.year) return other.year.compareTo(year); // descending
+    return other.month.compareTo(month); // descending
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MonthKey &&
+          runtimeType == other.runtimeType &&
+          year == other.year &&
+          month == other.month;
+
+  @override
+  int get hashCode => year.hashCode ^ month.hashCode;
+
+  @override
+  String toString() => title;
+}
+
 /// Service to handle Google OAuth authentication, Drive spreadsheet discovery/creation,
 /// and syncing transaction records along with an interactive visual Dashboard and Pie Chart.
 class GoogleSheetsService {
@@ -34,6 +64,48 @@ class GoogleSheetsService {
   static const String dashboardSheetTitle = 'Dashboard';
   static const String transactionsSheetTitle = 'Transactions';
   static const int defaultPieChartId = 1001;
+
+  static const List<String> monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  /// Formats year and month into human-readable sheet title (e.g. "September 2026").
+  static String getMonthSheetTitle(int year, int month) {
+    if (month < 1 || month > 12) return '$year-$month';
+    return '${monthNames[month - 1]} $year';
+  }
+
+  /// Returns the effective MonthKey for a date, mapping any transaction
+  /// occurring on the final day of a month into the following month's cycle
+  /// (e.g., Aug 31 -> September 2026, Sept 30 -> October 2026).
+  static MonthKey getEffectiveMonthKey(DateTime date) {
+    final lastDay = DateTime(date.year, date.month + 1, 0).day;
+    if (date.day == lastDay) {
+      final nextMonth = DateTime(date.year, date.month + 1, 1);
+      return MonthKey(nextMonth.year, nextMonth.month);
+    }
+    return MonthKey(date.year, date.month);
+  }
+
+  /// Returns the cycle date range for [monthKey] under the last-day shift rule
+  /// (starts on the last day of previous month, ends on the day before last day of this month).
+  static ({DateTime start, DateTime end}) getCycleDateRangeForMonth(MonthKey monthKey) {
+    final start = DateTime(monthKey.year, monthKey.month, 0);
+    final lastDayThisMonth = DateTime(monthKey.year, monthKey.month + 1, 0).day;
+    final end = DateTime(monthKey.year, monthKey.month, lastDayThisMonth - 1);
+    return (start: start, end: end);
+  }
 
   static const List<String> requiredScopes = [
     drive.DriveApi.driveFileScope,
@@ -167,8 +239,8 @@ class GoogleSheetsService {
 
   /// 2. File Discovery & Creation
   /// Searches for spreadsheet named [sheetTitle] in the user's Google Drive.
-  /// If found, verifies its sheets structure (Dashboard & Transactions).
-  /// If not found, creates a new spreadsheet and initializes Dashboard + Transactions.
+  /// If found, verifies its monthwise sheets structure.
+  /// If not found, creates a new spreadsheet and initializes monthwise sheets.
   Future<String?> initSheet({
     String sheetTitle = defaultSpreadsheetTitle,
     double? currentBalance,
@@ -250,7 +322,7 @@ class GoogleSheetsService {
         name: 'GoogleSheetsService',
       );
 
-      // 3. Set up Dashboard and Transactions tabs
+      // 3. Set up monthwise sheets
       await _ensureSheetsAndStructure(
         _spreadsheetId!,
         currentBalance: currentBalance,
@@ -270,55 +342,104 @@ class GoogleSheetsService {
     }
   }
 
-  /// Ensures that both the `Dashboard` and `Transactions` sheets exist,
-  /// initializes standard headers on `Transactions`, and populates `Dashboard`.
+  /// Ensures that monthwise sheets exist (e.g. "September 2026")
+  /// and each sheet contains its visual Dashboard on top (Rows 1-23)
+  /// and its Transactions table below (Rows 24+).
   Future<({int dashboardSheetId, int transactionsSheetId})?> _ensureSheetsAndStructure(
     String spreadsheetId, {
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
+    List<TransactionEntity>? transactions,
   }) async {
+    final ids = await _ensureMonthSheetsStructure(
+      spreadsheetId,
+      transactions: transactions ?? [],
+      currentBalance: currentBalance,
+      cycleStartDate: cycleStartDate,
+      cycleEndDate: cycleEndDate,
+    );
+    final firstId = ids.isNotEmpty ? ids.values.first : 0;
+    return (dashboardSheetId: firstId, transactionsSheetId: firstId);
+  }
+
+  /// Manages monthwise sheet creation, data population (Dashboard on top,
+  /// Transactions below), chart embedding, and cleanup of legacy sheets.
+  Future<Map<String, int>> _ensureMonthSheetsStructure(
+    String spreadsheetId, {
+    required List<TransactionEntity> transactions,
+    double? currentBalance,
+    DateTime? cycleStartDate,
+    DateTime? cycleEndDate,
+    DateTime? syncTime,
+  }) async {
+    final now = syncTime ?? DateTime.now();
+    final Map<String, int> monthSheetIds = {};
+
     try {
+      // 1. Partition transactions by effective MonthKey (last day of month -> next month)
+      final Map<MonthKey, List<TransactionEntity>> grouped = {};
+      for (final t in transactions) {
+        final key = getEffectiveMonthKey(t.date);
+        grouped.putIfAbsent(key, () => []).add(t);
+      }
+
+      // Always guarantee that the current active month tab is present
+      final currentMonthKey = getEffectiveMonthKey(now);
+      grouped.putIfAbsent(currentMonthKey, () => []);
+
+      // Sort month keys descending (newest month first)
+      final sortedMonthKeys = grouped.keys.toList()..sort();
+
+      // 2. Inspect existing sheets in the spreadsheet
       final spreadsheet = await _sheetsApi!.spreadsheets.get(spreadsheetId);
       final existingSheets = spreadsheet.sheets ?? [];
 
-      int? dashboardSheetId;
-      int? transactionsSheetId;
+      int maxSheetId = 0;
+      final existingTitlesMap = <String, int>{};
+      int? legacyDashboardId;
+      int? legacyTransactionsId;
+      int? sheet1Id;
 
       for (final s in existingSheets) {
         final title = s.properties?.title;
         final id = s.properties?.sheetId;
-        if (title == dashboardSheetTitle) {
-          dashboardSheetId = id;
-        } else if (title == transactionsSheetTitle) {
-          transactionsSheetId = id;
+        if (id != null) {
+          maxSheetId = math.max(maxSheetId, id);
+          if (title != null) {
+            existingTitlesMap[title] = id;
+            if (title == dashboardSheetTitle) {
+              legacyDashboardId = id;
+            } else if (title == transactionsSheetTitle) {
+              legacyTransactionsId = id;
+            } else if (title == 'Sheet1') {
+              sheet1Id = id;
+            }
+          }
         }
       }
 
-      final List<sheets.Request> initRequests = [];
-      int maxSheetId = 0;
-      for (final s in existingSheets) {
-        if (s.properties?.sheetId != null) {
-          maxSheetId = math.max(maxSheetId, s.properties!.sheetId!);
-        }
-      }
+      // 3. Add or rename sheets for each month
+      final List<sheets.Request> sheetCreationRequests = [];
+      bool sheet1Used = false;
 
-      // Handle Transactions Sheet: Rename Sheet1 if needed, or add new sheet
-      if (transactionsSheetId == null) {
-        final sheet1 = existingSheets.firstWhere(
-          (s) => s.properties?.title == 'Sheet1',
-          orElse: () => sheets.Sheet(),
-        );
+      for (int i = 0; i < sortedMonthKeys.length; i++) {
+        final monthKey = sortedMonthKeys[i];
+        final title = monthKey.title;
 
-        if (sheet1.properties?.sheetId != null) {
-          transactionsSheetId = sheet1.properties!.sheetId!;
-          initRequests.add(
+        if (existingTitlesMap.containsKey(title)) {
+          monthSheetIds[title] = existingTitlesMap[title]!;
+        } else if (sheet1Id != null && !sheet1Used) {
+          // Rename default 'Sheet1' to the first month title
+          sheet1Used = true;
+          monthSheetIds[title] = sheet1Id;
+          sheetCreationRequests.add(
             sheets.Request(
               updateSheetProperties: sheets.UpdateSheetPropertiesRequest(
                 properties: sheets.SheetProperties(
-                  sheetId: transactionsSheetId,
-                  title: transactionsSheetTitle,
-                  index: 1,
+                  sheetId: sheet1Id,
+                  title: title,
+                  index: i,
                 ),
                 fields: 'title,index',
               ),
@@ -326,14 +447,15 @@ class GoogleSheetsService {
           );
         } else {
           maxSheetId++;
-          transactionsSheetId = maxSheetId;
-          initRequests.add(
+          final newId = maxSheetId;
+          monthSheetIds[title] = newId;
+          sheetCreationRequests.add(
             sheets.Request(
               addSheet: sheets.AddSheetRequest(
                 properties: sheets.SheetProperties(
-                  sheetId: transactionsSheetId,
-                  title: transactionsSheetTitle,
-                  index: 1,
+                  sheetId: newId,
+                  title: title,
+                  index: i,
                 ),
               ),
             ),
@@ -341,505 +463,628 @@ class GoogleSheetsService {
         }
       }
 
-      // Handle Dashboard Sheet: Add if it doesn't exist
-      if (dashboardSheetId == null) {
-        maxSheetId++;
-        dashboardSheetId = maxSheetId;
-        initRequests.add(
+      if (sheetCreationRequests.isNotEmpty) {
+        await _sheetsApi!.spreadsheets.batchUpdate(
+          sheets.BatchUpdateSpreadsheetRequest(requests: sheetCreationRequests),
+          spreadsheetId,
+        );
+      }
+
+      // 4. Populate each month's sheet content & styling (Dashboard on top, Transactions below)
+      for (int i = 0; i < sortedMonthKeys.length; i++) {
+        final monthKey = sortedMonthKeys[i];
+        final title = monthKey.title;
+        final sheetId = monthSheetIds[title]!;
+        final monthTxns = grouped[monthKey] ?? [];
+
+        await _populateAndFormatMonthSheet(
+          spreadsheetId: spreadsheetId,
+          sheetId: sheetId,
+          monthKey: monthKey,
+          transactions: monthTxns,
+          currentBalance: currentBalance,
+          cycleStartDate: cycleStartDate,
+          cycleEndDate: cycleEndDate,
+          syncTime: now,
+          sheetIndex: i,
+        );
+      }
+
+      // 5. Clean up legacy 'Dashboard' and 'Transactions' sheets if present
+      final List<sheets.Request> cleanupRequests = [];
+      if (legacyDashboardId != null) {
+        cleanupRequests.add(
           sheets.Request(
-            addSheet: sheets.AddSheetRequest(
-              properties: sheets.SheetProperties(
-                sheetId: dashboardSheetId,
-                title: dashboardSheetTitle,
-                index: 0,
-              ),
-            ),
+            deleteSheet: sheets.DeleteSheetRequest(sheetId: legacyDashboardId),
+          ),
+        );
+      }
+      if (legacyTransactionsId != null) {
+        cleanupRequests.add(
+          sheets.Request(
+            deleteSheet: sheets.DeleteSheetRequest(sheetId: legacyTransactionsId),
           ),
         );
       }
 
-      if (initRequests.isNotEmpty) {
-        await _sheetsApi!.spreadsheets.batchUpdate(
-          sheets.BatchUpdateSpreadsheetRequest(requests: initRequests),
-          spreadsheetId,
-        );
-      }
-
-      // Ensure header row in Transactions sheet
-      try {
-        final existingHeader = await _sheetsApi!.spreadsheets.values.get(
-          spreadsheetId,
-          '$transactionsSheetTitle!A1:G1',
-        );
-
-        if (existingHeader.values == null || existingHeader.values!.isEmpty) {
-          final headerRange = sheets.ValueRange(
-            values: [
-              [
-                'Date',
-                'Category',
-                'Amount',
-                'Type',
-                'Merchant',
-                'Notes',
-                'Transaction ID',
-              ],
-            ],
-          );
-
-          await _sheetsApi!.spreadsheets.values.update(
-            headerRange,
+      if (cleanupRequests.isNotEmpty) {
+        try {
+          await _sheetsApi!.spreadsheets.batchUpdate(
+            sheets.BatchUpdateSpreadsheetRequest(requests: cleanupRequests),
             spreadsheetId,
-            '$transactionsSheetTitle!A1',
-            valueInputOption: 'USER_ENTERED',
+          );
+        } catch (e) {
+          developer.log(
+            'Notice: Legacy sheet cleanup skipped: $e',
+            name: 'GoogleSheetsService',
           );
         }
-      } catch (e) {
-        developer.log(
-          'Transactions header check/setup notice: $e',
-          name: 'GoogleSheetsService',
-        );
       }
 
-      // Populate or refresh Dashboard sheet
-      await _updateDashboardSheet(
-        spreadsheetId: spreadsheetId,
-        dashboardSheetId: dashboardSheetId,
-        currentBalance: currentBalance,
-        cycleStartDate: cycleStartDate,
-        cycleEndDate: cycleEndDate,
-      );
-
-      return (
-        dashboardSheetId: dashboardSheetId,
-        transactionsSheetId: transactionsSheetId,
-      );
+      return monthSheetIds;
     } catch (e, stackTrace) {
       developer.log(
-        'Error ensuring sheets and structure: $e',
+        'Error ensuring month sheets and structure: $e',
         name: 'GoogleSheetsService',
         error: e,
         stackTrace: stackTrace,
       );
-      return null;
+      return monthSheetIds;
     }
   }
 
-  /// Builds and updates the visual Dashboard sheet containing:
-  /// - Current Balance card (dynamically computed)
-  /// - Active Billing Cycle date range reference cells (B3 to D3)
-  /// - Monthly Income & Monthly Expense formulas scoped to active cycle
-  /// - Net Monthly Flow metric
-  /// - All-Time Income & Expense metrics
-  /// - Category Expense breakdown table scoped to active cycle
-  /// - Interactive Embedded Pie Chart
-  Future<void> _updateDashboardSheet({
+  /// Builds and updates a single month's sheet:
+  /// - Top part (Rows 1-23): Month Dashboard & Embedded Pie Chart
+  /// - Bottom part (Rows 24+): Month Transactions table
+  Future<void> _populateAndFormatMonthSheet({
     required String spreadsheetId,
-    required int dashboardSheetId,
+    required int sheetId,
+    required MonthKey monthKey,
+    required List<TransactionEntity> transactions,
     double? currentBalance,
     DateTime? cycleStartDate,
     DateTime? cycleEndDate,
-    DateTime? syncTime,
+    required DateTime syncTime,
+    required int sheetIndex,
   }) async {
-    try {
-      final now = syncTime ?? DateTime.now();
-      final cycleStart =
-          cycleStartDate ?? DateTime(now.year, now.month, 1);
-      final cycleEnd =
-          cycleEndDate ?? DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    final title = monthKey.title;
+    final currentEffectiveMonthKey = getEffectiveMonthKey(syncTime);
+    final isCurrentMonth = (currentEffectiveMonthKey == monthKey);
 
-      final cycleStartStr =
-          '${cycleStart.year}-${cycleStart.month.toString().padLeft(2, '0')}-${cycleStart.day.toString().padLeft(2, '0')}';
-      final cycleEndStr =
-          '${cycleEnd.year}-${cycleEnd.month.toString().padLeft(2, '0')}-${cycleEnd.day.toString().padLeft(2, '0')}';
-      final timestampStr =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    // Salary-aligned cycle: starts on the last day of previous month, ends on the day before the last day of this month
+    final defaultCycleRange = getCycleDateRangeForMonth(monthKey);
+    final periodStart =
+        (isCurrentMonth && cycleStartDate != null) ? cycleStartDate : defaultCycleRange.start;
+    final periodEnd =
+        (isCurrentMonth && cycleEndDate != null) ? cycleEndDate : defaultCycleRange.end;
 
-      // 1. Prepare Dashboard Cell Content
-      final List<List<Object>> dashboardRows = [
-        // Row 1: Banner Title
-        ['xBudget Financial Dashboard', '', '', '', '', '', ''],
-        // Row 2: Subtitle / Timestamp
-        ['Last Synced: $timestampStr', '', '', '', '', '', ''],
-        // Row 3: Active Billing Cycle Range
-        ['Active Billing Cycle:', cycleStartStr, 'to', cycleEndStr, '', '', ''],
-        // Row 4: Monthly KPI Headers
-        [
-          'Current Balance',
-          '',
-          'Monthly Income',
-          '',
-          'Monthly Expense',
-          '',
-          'Net Monthly Flow',
-        ],
-        // Row 5: Monthly KPI Values (Scoped to active cycle dates in B3 & D3)
-        [
-          currentBalance ?? 0.0,
-          '',
-          '=SUMIFS(Transactions!C:C, Transactions!D:D, "income", Transactions!A:A, ">="&\$B\$3, Transactions!A:A, "<="&\$D\$3)',
-          '',
-          '=SUMIFS(Transactions!C:C, Transactions!D:D, "expense", Transactions!A:A, ">="&\$B\$3, Transactions!A:A, "<="&\$D\$3)',
-          '',
-          '=C5-E5',
-        ],
-        // Row 6: All-Time KPI Headers
-        ['', '', 'All-Time Income', '', 'All-Time Expense', '', 'All-Time Net'],
-        // Row 7: All-Time KPI Values
-        [
-          '',
-          '',
-          '=SUMIF(Transactions!D:D, "income", Transactions!C:C)',
-          '',
-          '=SUMIF(Transactions!D:D, "expense", Transactions!C:C)',
-          '',
-          '=C7-E7',
-        ],
-        // Row 8: Spacer
-        ['', '', '', '', '', '', ''],
-        // Row 9: Category Breakdown Header
-        ['Monthly Expense Category', 'Spend Amount', '', '', '', '', ''],
-      ];
+    final periodStartStr =
+        '${periodStart.year}-${periodStart.month.toString().padLeft(2, '0')}-${periodStart.day.toString().padLeft(2, '0')}';
+    final periodEndStr =
+        '${periodEnd.year}-${periodEnd.month.toString().padLeft(2, '0')}-${periodEnd.day.toString().padLeft(2, '0')}';
+    final timestampStr =
+        '${syncTime.year}-${syncTime.month.toString().padLeft(2, '0')}-${syncTime.day.toString().padLeft(2, '0')} ${syncTime.hour.toString().padLeft(2, '0')}:${syncTime.minute.toString().padLeft(2, '0')}';
 
-      // Rows 10..21: Categories breakdown with SUMIFS formulas (Scoped to active cycle in B3 & D3)
-      final categories = BudgetCategory.values;
-      for (int i = 0; i < categories.length; i++) {
-        final rowNum = 10 + i; // 1-based row index in spreadsheet
-        final cat = categories[i];
-        dashboardRows.add([
-          cat.displayName,
-          '=SUMIFS(Transactions!C:C, Transactions!B:B, A$rowNum, Transactions!D:D, "expense", Transactions!A:A, ">="&\$B\$3, Transactions!A:A, "<="&\$D\$3)',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ]);
-      }
+    final categories = BudgetCategory.values;
+    final List<List<Object>> rows = [
+      // Row 1: Banner Title
+      ['xBudget Financial Dashboard - $title', '', '', '', '', '', ''],
+      // Row 2: Subtitle / Timestamp
+      ['Last Synced: $timestampStr', '', '', '', '', '', ''],
+      // Row 3: Month Period
+      ['Month Period:', periodStartStr, 'to', periodEndStr, '', '', ''],
+      // Row 4: Monthly KPI Headers
+      [
+        'Current Balance',
+        '',
+        'Monthly Income',
+        '',
+        'Monthly Expense',
+        '',
+        'Net Monthly Flow',
+      ],
+      // Row 5: Monthly KPI Values
+      [
+        isCurrentMonth ? (currentBalance ?? 0.0) : 0.0,
+        '',
+        '=SUMIF(D27:D, "income", C27:C)',
+        '',
+        '=SUMIF(D27:D, "expense", C27:C)',
+        '',
+        '=C5-E5',
+      ],
+      // Row 6: Activity KPI Headers
+      ['', '', 'Total Transactions', '', 'Expense Count', '', 'Income Count'],
+      // Row 7: Activity KPI Values
+      [
+        '',
+        '',
+        '=COUNTA(G27:G)',
+        '',
+        '=COUNTIF(D27:D, "expense")',
+        '',
+        '=COUNTIF(D27:D, "income")',
+      ],
+      // Row 8: Spacer
+      ['', '', '', '', '', '', ''],
+      // Row 9: Category Breakdown Header
+      ['Monthly Expense Category', 'Spend Amount', '', '', '', '', ''],
+    ];
 
-      // Total row at bottom of category breakdown
-      final totalRowNum = 10 + categories.length;
-      dashboardRows.add([
-        'Total Monthly Expenses',
-        '=SUM(B10:B${totalRowNum - 1})',
+    // Rows 10..21: Categories breakdown with SUMIFS formulas scoped to transactions below
+    for (int i = 0; i < categories.length; i++) {
+      final rowNum = 10 + i;
+      final cat = categories[i];
+      rows.add([
+        cat.displayName,
+        '=SUMIFS(C\$27:C, B\$27:B, A$rowNum, D\$27:D, "expense")',
         '',
         '',
         '',
         '',
         '',
       ]);
+    }
 
-      // Write values to Dashboard sheet
-      final valueRange = sheets.ValueRange(values: dashboardRows);
-      await _sheetsApi!.spreadsheets.values.update(
-        valueRange,
+    // Row 22: Total Monthly Expenses
+    final totalRowNum = 10 + categories.length;
+    rows.add([
+      'Total Monthly Expenses',
+      '=SUM(B10:B${totalRowNum - 1})',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ]);
+
+    // Row 23: Spacer
+    rows.add(['', '', '', '', '', '', '']);
+    // Row 24: Spacer
+    rows.add(['', '', '', '', '', '', '']);
+    // Row 25: Transactions Section Title
+    rows.add(['$title Transactions', '', '', '', '', '', '']);
+    // Row 26: Transactions Table Column Headers
+    rows.add([
+      'Date',
+      'Category',
+      'Amount',
+      'Type',
+      'Merchant',
+      'Notes',
+      'Transaction ID',
+    ]);
+
+    // Rows 27+: Sorted transactions for this month
+    final sortedTxns = List<TransactionEntity>.from(transactions)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    for (final t in sortedTxns) {
+      final dateStr =
+          '${t.date.year}-${t.date.month.toString().padLeft(2, '0')}-${t.date.day.toString().padLeft(2, '0')}';
+      rows.add([
+        dateStr,
+        t.category.displayName,
+        t.amount,
+        t.transactionType,
+        t.merchant,
+        t.note ?? '',
+        t.id,
+      ]);
+    }
+
+    // 1. Clear previous content to avoid ghost rows
+    try {
+      await _sheetsApi!.spreadsheets.values.clear(
+        sheets.ClearValuesRequest(),
         spreadsheetId,
-        '$dashboardSheetTitle!A1',
-        valueInputOption: 'USER_ENTERED',
+        '$title!A1:Z',
       );
+    } catch (_) {}
 
-      // 2. Format Dashboard styling and verify Embedded Pie Chart
-      final List<sheets.Request> formattingRequests = [];
+    // 2. Write values to the sheet
+    await _sheetsApi!.spreadsheets.values.update(
+      sheets.ValueRange(values: rows),
+      spreadsheetId,
+      '$title!A1',
+      valueInputOption: 'USER_ENTERED',
+    );
 
-      // Title Banner Formatting (Row 1)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 0,
-              endRowIndex: 1,
-              startColumnIndex: 0,
-              endColumnIndex: 7,
+    // 3. Formatting & Pie Chart batch update
+    final List<sheets.Request> requests = [];
+
+    // Tab index ordering
+    requests.add(
+      sheets.Request(
+        updateSheetProperties: sheets.UpdateSheetPropertiesRequest(
+          properties: sheets.SheetProperties(
+            sheetId: sheetId,
+            index: sheetIndex,
+          ),
+          fields: 'index',
+        ),
+      ),
+    );
+
+    // Title Banner (Row 1)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 0,
+            endRowIndex: 1,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.12, green: 0.16, blue: 0.23),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 14,
+                foregroundColor: sheets.Color(red: 1.0, green: 1.0, blue: 1.0),
+              ),
+              horizontalAlignment: 'LEFT',
             ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                backgroundColor: sheets.Color(
-                  red: 0.12,
-                  green: 0.16,
-                  blue: 0.23,
-                ),
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 14,
-                  foregroundColor: sheets.Color(
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                  ),
-                ),
-                horizontalAlignment: 'LEFT',
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Subtitle (Row 2)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 1,
+            endRowIndex: 2,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              textFormat: sheets.TextFormat(
+                italic: true,
+                fontSize: 9,
+                foregroundColor: sheets.Color(red: 0.45, green: 0.45, blue: 0.45),
               ),
             ),
-            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
           ),
+          fields: 'userEnteredFormat(textFormat)',
         ),
-      );
+      ),
+    );
 
-      // Subtitle Formatting (Row 2)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 1,
-              endRowIndex: 2,
-              startColumnIndex: 0,
-              endColumnIndex: 7,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                textFormat: sheets.TextFormat(
-                  italic: true,
-                  fontSize: 9,
-                  foregroundColor: sheets.Color(
-                    red: 0.45,
-                    green: 0.45,
-                    blue: 0.45,
-                  ),
-                ),
+    // Period Range (Row 3)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 2,
+            endRowIndex: 3,
+            startColumnIndex: 0,
+            endColumnIndex: 1,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 9,
+                foregroundColor: sheets.Color(red: 0.35, green: 0.40, blue: 0.48),
               ),
             ),
-            fields: 'userEnteredFormat(textFormat)',
           ),
+          fields: 'userEnteredFormat(textFormat)',
         ),
-      );
+      ),
+    );
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 2,
+            endRowIndex: 3,
+            startColumnIndex: 1,
+            endColumnIndex: 4,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.94, green: 0.96, blue: 0.99),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 9,
+                foregroundColor: sheets.Color(red: 0.15, green: 0.35, blue: 0.65),
+              ),
+              horizontalAlignment: 'CENTER',
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        ),
+      ),
+    );
 
-      // Cycle Period Formatting (Row 3)
-      formattingRequests.add(
+    // Monthly KPI Headers (Row 4)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 3,
+            endRowIndex: 4,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.93, green: 0.95, blue: 0.98),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 10,
+                foregroundColor: sheets.Color(red: 0.18, green: 0.24, blue: 0.32),
+              ),
+              horizontalAlignment: 'CENTER',
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Monthly KPI Values (Row 5)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 4,
+            endRowIndex: 5,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 12,
+              ),
+              numberFormat: sheets.NumberFormat(
+                type: 'NUMBER',
+                pattern: '#,##0.00',
+              ),
+              horizontalAlignment: 'CENTER',
+            ),
+          ),
+          fields: 'userEnteredFormat(textFormat,numberFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Activity KPI Headers (Row 6)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 5,
+            endRowIndex: 6,
+            startColumnIndex: 2,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.95, green: 0.96, blue: 0.98),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 10,
+                foregroundColor: sheets.Color(red: 0.25, green: 0.30, blue: 0.38),
+              ),
+              horizontalAlignment: 'CENTER',
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Activity KPI Values (Row 7)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 6,
+            endRowIndex: 7,
+            startColumnIndex: 2,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 11,
+              ),
+              numberFormat: sheets.NumberFormat(
+                type: 'NUMBER',
+                pattern: '#,##0',
+              ),
+              horizontalAlignment: 'CENTER',
+            ),
+          ),
+          fields: 'userEnteredFormat(textFormat,numberFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Category Breakdown Header (Row 9)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 8,
+            endRowIndex: 9,
+            startColumnIndex: 0,
+            endColumnIndex: 2,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.20, green: 0.28, blue: 0.38),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 11,
+                foregroundColor: sheets.Color(red: 1.0, green: 1.0, blue: 1.0),
+              ),
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat)',
+        ),
+      ),
+    );
+
+    // Category Amounts Formatting (Rows 10..21, Col B)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 9,
+            endRowIndex: totalRowNum - 1,
+            startColumnIndex: 1,
+            endColumnIndex: 2,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              numberFormat: sheets.NumberFormat(
+                type: 'NUMBER',
+                pattern: '#,##0.00',
+              ),
+              horizontalAlignment: 'RIGHT',
+            ),
+          ),
+          fields: 'userEnteredFormat(numberFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Category Total Row (Row 22)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: totalRowNum - 1,
+            endRowIndex: totalRowNum,
+            startColumnIndex: 0,
+            endColumnIndex: 2,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.94, green: 0.95, blue: 0.97),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat)',
+        ),
+      ),
+    );
+
+    // Transactions Section Banner (Row 25)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 24,
+            endRowIndex: 25,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.94, green: 0.96, blue: 0.99),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 11,
+                foregroundColor: sheets.Color(red: 0.12, green: 0.16, blue: 0.23),
+              ),
+              horizontalAlignment: 'LEFT',
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Transactions Table Column Headers (Row 26)
+    requests.add(
+      sheets.Request(
+        repeatCell: sheets.RepeatCellRequest(
+          range: sheets.GridRange(
+            sheetId: sheetId,
+            startRowIndex: 25,
+            endRowIndex: 26,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          ),
+          cell: sheets.CellData(
+            userEnteredFormat: sheets.CellFormat(
+              backgroundColor: sheets.Color(red: 0.90, green: 0.92, blue: 0.95),
+              textFormat: sheets.TextFormat(
+                bold: true,
+                fontSize: 10,
+                foregroundColor: sheets.Color(red: 0.12, green: 0.16, blue: 0.23),
+              ),
+              horizontalAlignment: 'CENTER',
+            ),
+          ),
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+        ),
+      ),
+    );
+
+    // Format Transactions Data Rows (Rows 27+)
+    if (sortedTxns.isNotEmpty) {
+      final txEndRow = 26 + sortedTxns.length;
+
+      // Col A: Date (centered)
+      requests.add(
         sheets.Request(
           repeatCell: sheets.RepeatCellRequest(
             range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 2,
-              endRowIndex: 3,
+              sheetId: sheetId,
+              startRowIndex: 26,
+              endRowIndex: txEndRow,
               startColumnIndex: 0,
               endColumnIndex: 1,
             ),
             cell: sheets.CellData(
               userEnteredFormat: sheets.CellFormat(
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 9,
-                  foregroundColor: sheets.Color(
-                    red: 0.35,
-                    green: 0.40,
-                    blue: 0.48,
-                  ),
-                ),
-              ),
-            ),
-            fields: 'userEnteredFormat(textFormat)',
-          ),
-        ),
-      );
-
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 2,
-              endRowIndex: 3,
-              startColumnIndex: 1,
-              endColumnIndex: 4,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                backgroundColor: sheets.Color(
-                  red: 0.94,
-                  green: 0.96,
-                  blue: 0.99,
-                ),
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 9,
-                  foregroundColor: sheets.Color(
-                    red: 0.15,
-                    green: 0.35,
-                    blue: 0.65,
-                  ),
-                ),
                 horizontalAlignment: 'CENTER',
               ),
             ),
-            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
+            fields: 'userEnteredFormat(horizontalAlignment)',
           ),
         ),
       );
 
-      // Monthly KPI Header Formatting (Row 4)
-      formattingRequests.add(
+      // Col C: Amount (number format #,##0.00, right-aligned)
+      requests.add(
         sheets.Request(
           repeatCell: sheets.RepeatCellRequest(
             range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 3,
-              endRowIndex: 4,
-              startColumnIndex: 0,
-              endColumnIndex: 7,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                backgroundColor: sheets.Color(
-                  red: 0.93,
-                  green: 0.95,
-                  blue: 0.98,
-                ),
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 10,
-                  foregroundColor: sheets.Color(
-                    red: 0.18,
-                    green: 0.24,
-                    blue: 0.32,
-                  ),
-                ),
-                horizontalAlignment: 'CENTER',
-              ),
-            ),
-            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
-          ),
-        ),
-      );
-
-      // All-Time KPI Header Formatting (Row 6)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 5,
-              endRowIndex: 6,
+              sheetId: sheetId,
+              startRowIndex: 26,
+              endRowIndex: txEndRow,
               startColumnIndex: 2,
-              endColumnIndex: 7,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                backgroundColor: sheets.Color(
-                  red: 0.95,
-                  green: 0.96,
-                  blue: 0.98,
-                ),
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 10,
-                  foregroundColor: sheets.Color(
-                    red: 0.25,
-                    green: 0.30,
-                    blue: 0.38,
-                  ),
-                ),
-                horizontalAlignment: 'CENTER',
-              ),
-            ),
-            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
-          ),
-        ),
-      );
-
-      // Monthly KPI Values Formatting (Row 5)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 4,
-              endRowIndex: 5,
-              startColumnIndex: 0,
-              endColumnIndex: 7,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 12,
-                ),
-                numberFormat: sheets.NumberFormat(
-                  type: 'NUMBER',
-                  pattern: '#,##0.00',
-                ),
-                horizontalAlignment: 'CENTER',
-              ),
-            ),
-            fields: 'userEnteredFormat(textFormat,numberFormat,horizontalAlignment)',
-          ),
-        ),
-      );
-
-      // All-Time KPI Values Formatting (Row 7)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 2,
-              endColumnIndex: 7,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 11,
-                ),
-                numberFormat: sheets.NumberFormat(
-                  type: 'NUMBER',
-                  pattern: '#,##0.00',
-                ),
-                horizontalAlignment: 'CENTER',
-              ),
-            ),
-            fields: 'userEnteredFormat(textFormat,numberFormat,horizontalAlignment)',
-          ),
-        ),
-      );
-
-      // Category Table Header Formatting (Row 9)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 8,
-              endRowIndex: 9,
-              startColumnIndex: 0,
-              endColumnIndex: 2,
-            ),
-            cell: sheets.CellData(
-              userEnteredFormat: sheets.CellFormat(
-                backgroundColor: sheets.Color(
-                  red: 0.20,
-                  green: 0.28,
-                  blue: 0.38,
-                ),
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 11,
-                  foregroundColor: sheets.Color(
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                  ),
-                ),
-              ),
-            ),
-            fields: 'userEnteredFormat(backgroundColor,textFormat)',
-          ),
-        ),
-      );
-
-      // Category Table Amounts Formatting (Rows 10..22)
-      formattingRequests.add(
-        sheets.Request(
-          repeatCell: sheets.RepeatCellRequest(
-            range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: 9,
-              endRowIndex: totalRowNum,
-              startColumnIndex: 1,
-              endColumnIndex: 2,
+              endColumnIndex: 3,
             ),
             cell: sheets.CellData(
               userEnteredFormat: sheets.CellFormat(
@@ -855,198 +1100,128 @@ class GoogleSheetsService {
         ),
       );
 
-      // Category Total Row Formatting
-      formattingRequests.add(
+      // Col D: Type (centered)
+      requests.add(
         sheets.Request(
           repeatCell: sheets.RepeatCellRequest(
             range: sheets.GridRange(
-              sheetId: dashboardSheetId,
-              startRowIndex: totalRowNum - 1,
-              endRowIndex: totalRowNum,
-              startColumnIndex: 0,
-              endColumnIndex: 2,
+              sheetId: sheetId,
+              startRowIndex: 26,
+              endRowIndex: txEndRow,
+              startColumnIndex: 3,
+              endColumnIndex: 4,
             ),
             cell: sheets.CellData(
               userEnteredFormat: sheets.CellFormat(
-                backgroundColor: sheets.Color(
-                  red: 0.94,
-                  green: 0.95,
-                  blue: 0.97,
-                ),
-                textFormat: sheets.TextFormat(
-                  bold: true,
-                  fontSize: 11,
-                ),
+                horizontalAlignment: 'CENTER',
               ),
             ),
-            fields: 'userEnteredFormat(backgroundColor,textFormat)',
+            fields: 'userEnteredFormat(horizontalAlignment)',
           ),
         ),
       );
+    }
 
-      // Column widths
-      formattingRequests.add(
+    // Column widths
+    final columnWidths = [190, 140, 160, 100, 160, 180, 180];
+    for (int col = 0; col < columnWidths.length; col++) {
+      requests.add(
         sheets.Request(
           updateDimensionProperties: sheets.UpdateDimensionPropertiesRequest(
             range: sheets.DimensionRange(
-              sheetId: dashboardSheetId,
+              sheetId: sheetId,
               dimension: 'COLUMNS',
-              startIndex: 0,
-              endIndex: 1,
+              startIndex: col,
+              endIndex: col + 1,
             ),
-            properties: sheets.DimensionProperties(pixelSize: 190),
+            properties: sheets.DimensionProperties(pixelSize: columnWidths[col]),
             fields: 'pixelSize',
           ),
         ),
       );
-      formattingRequests.add(
-        sheets.Request(
-          updateDimensionProperties: sheets.UpdateDimensionPropertiesRequest(
-            range: sheets.DimensionRange(
-              sheetId: dashboardSheetId,
-              dimension: 'COLUMNS',
-              startIndex: 1,
-              endIndex: 2,
-            ),
-            properties: sheets.DimensionProperties(pixelSize: 140),
-            fields: 'pixelSize',
-          ),
-        ),
-      );
-      formattingRequests.add(
-        sheets.Request(
-          updateDimensionProperties: sheets.UpdateDimensionPropertiesRequest(
-            range: sheets.DimensionRange(
-              sheetId: dashboardSheetId,
-              dimension: 'COLUMNS',
-              startIndex: 2,
-              endIndex: 3,
-            ),
-            properties: sheets.DimensionProperties(pixelSize: 160),
-            fields: 'pixelSize',
-          ),
-        ),
-      );
-      formattingRequests.add(
-        sheets.Request(
-          updateDimensionProperties: sheets.UpdateDimensionPropertiesRequest(
-            range: sheets.DimensionRange(
-              sheetId: dashboardSheetId,
-              dimension: 'COLUMNS',
-              startIndex: 4,
-              endIndex: 5,
-            ),
-            properties: sheets.DimensionProperties(pixelSize: 160),
-            fields: 'pixelSize',
-          ),
-        ),
-      );
-      formattingRequests.add(
-        sheets.Request(
-          updateDimensionProperties: sheets.UpdateDimensionPropertiesRequest(
-            range: sheets.DimensionRange(
-              sheetId: dashboardSheetId,
-              dimension: 'COLUMNS',
-              startIndex: 6,
-              endIndex: 7,
-            ),
-            properties: sheets.DimensionProperties(pixelSize: 160),
-            fields: 'pixelSize',
-          ),
-        ),
-      );
+    }
 
-      // Check if Pie Chart exists on the dashboard
-      final currentSpreadsheet =
-          await _sheetsApi!.spreadsheets.get(spreadsheetId);
-      final dashboardSheet = currentSpreadsheet.sheets?.firstWhere(
-        (s) => s.properties?.sheetId == dashboardSheetId,
-        orElse: () => sheets.Sheet(),
-      );
+    // 4. Check / Insert Embedded Pie Chart
+    final currentSpreadsheet = await _sheetsApi!.spreadsheets.get(spreadsheetId);
+    final currentSheet = currentSpreadsheet.sheets?.firstWhere(
+      (s) => s.properties?.sheetId == sheetId,
+      orElse: () => sheets.Sheet(),
+    );
 
-      final hasPieChart = dashboardSheet?.charts?.any(
-            (c) =>
-                c.spec?.pieChart != null || c.chartId == defaultPieChartId,
-          ) ??
-          false;
+    final chartId = 1000 + sheetId;
+    final hasPieChart = currentSheet?.charts?.any(
+          (c) => c.chartId == chartId || c.spec?.pieChart != null,
+        ) ??
+        false;
 
-      if (!hasPieChart) {
-        final pieChart = sheets.EmbeddedChart(
-          chartId: defaultPieChartId,
-          spec: sheets.ChartSpec(
-            title: 'Monthly Expense by Category',
-            pieChart: sheets.PieChartSpec(
-              legendPosition: 'RIGHT_LEGEND',
-              pieHole: 0.35,
-              threeDimensional: false,
-              domain: sheets.ChartData(
-                sourceRange: sheets.ChartSourceRange(
-                  sources: [
-                    sheets.GridRange(
-                      sheetId: dashboardSheetId,
-                      startRowIndex: 9,
-                      endRowIndex: 9 + categories.length,
-                      startColumnIndex: 0,
-                      endColumnIndex: 1,
-                    ),
-                  ],
-                ),
+    if (!hasPieChart) {
+      final pieChart = sheets.EmbeddedChart(
+        chartId: chartId,
+        spec: sheets.ChartSpec(
+          title: 'Monthly Expense by Category',
+          pieChart: sheets.PieChartSpec(
+            legendPosition: 'RIGHT_LEGEND',
+            pieHole: 0.35,
+            threeDimensional: false,
+            domain: sheets.ChartData(
+              sourceRange: sheets.ChartSourceRange(
+                sources: [
+                  sheets.GridRange(
+                    sheetId: sheetId,
+                    startRowIndex: 9,
+                    endRowIndex: 9 + categories.length,
+                    startColumnIndex: 0,
+                    endColumnIndex: 1,
+                  ),
+                ],
               ),
-              series: sheets.ChartData(
-                sourceRange: sheets.ChartSourceRange(
-                  sources: [
-                    sheets.GridRange(
-                      sheetId: dashboardSheetId,
-                      startRowIndex: 9,
-                      endRowIndex: 9 + categories.length,
-                      startColumnIndex: 1,
-                      endColumnIndex: 2,
-                    ),
-                  ],
-                ),
+            ),
+            series: sheets.ChartData(
+              sourceRange: sheets.ChartSourceRange(
+                sources: [
+                  sheets.GridRange(
+                    sheetId: sheetId,
+                    startRowIndex: 9,
+                    endRowIndex: 9 + categories.length,
+                    startColumnIndex: 1,
+                    endColumnIndex: 2,
+                  ),
+                ],
               ),
             ),
           ),
-          position: sheets.EmbeddedObjectPosition(
-            overlayPosition: sheets.OverlayPosition(
-              anchorCell: sheets.GridCoordinate(
-                sheetId: dashboardSheetId,
-                rowIndex: 8,
-                columnIndex: 3,
-              ),
-              widthPixels: 520,
-              heightPixels: 350,
+        ),
+        position: sheets.EmbeddedObjectPosition(
+          overlayPosition: sheets.OverlayPosition(
+            anchorCell: sheets.GridCoordinate(
+              sheetId: sheetId,
+              rowIndex: 8,
+              columnIndex: 3,
             ),
+            widthPixels: 520,
+            heightPixels: 350,
           ),
-        );
+        ),
+      );
 
-        formattingRequests.add(
-          sheets.Request(
-            addChart: sheets.AddChartRequest(
-              chart: pieChart,
-            ),
+      requests.add(
+        sheets.Request(
+          addChart: sheets.AddChartRequest(
+            chart: pieChart,
           ),
-        );
-      }
+        ),
+      );
+    }
 
-      if (formattingRequests.isNotEmpty) {
-        await _sheetsApi!.spreadsheets.batchUpdate(
-          sheets.BatchUpdateSpreadsheetRequest(requests: formattingRequests),
-          spreadsheetId,
-        );
-      }
-    } catch (e, stackTrace) {
-      developer.log(
-        'Error updating dashboard sheet: $e',
-        name: 'GoogleSheetsService',
-        error: e,
-        stackTrace: stackTrace,
+    if (requests.isNotEmpty) {
+      await _sheetsApi!.spreadsheets.batchUpdate(
+        sheets.BatchUpdateSpreadsheetRequest(requests: requests),
+        spreadsheetId,
       );
     }
   }
 
-  /// 3. Writing Data - Single Transaction
-  /// Appends a single transaction row to the `Transactions` sheet and refreshes the Dashboard.
+  /// Appends a single transaction to its respective month sheet.
   Future<bool> addTransaction({
     required String date,
     required String category,
@@ -1060,6 +1235,10 @@ class GoogleSheetsService {
     DateTime? cycleEndDate,
   }) async {
     try {
+      final txnDate = DateTime.tryParse(date) ?? DateTime.now();
+      final monthKey = getEffectiveMonthKey(txnDate);
+      final monthSheetTitle = monthKey.title;
+
       final sheetId = await initSheet(
         currentBalance: currentBalance,
         cycleStartDate: cycleStartDate,
@@ -1082,13 +1261,13 @@ class GoogleSheetsService {
       await _sheetsApi!.spreadsheets.values.append(
         valueRange,
         sheetId,
-        '$transactionsSheetTitle!A1',
+        '$monthSheetTitle!A26',
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
       );
 
       developer.log(
-        'Appended single transaction to $transactionsSheetTitle sheet successfully.',
+        'Appended single transaction to $monthSheetTitle sheet successfully.',
         name: 'GoogleSheetsService',
       );
       return true;
@@ -1103,9 +1282,8 @@ class GoogleSheetsService {
     }
   }
 
-  /// 4. Bulk Sync Transactions (Idempotent)
-  /// Appends missing transactions to `Transactions` sheet and refreshes the `Dashboard`
-  /// (Current Balance, Cycle-scoped Income/Expense formulas, and Pie Chart).
+  /// Synchronizes transactions to Google Sheets organized monthwise.
+  /// Each month gets its own sheet tab with visual Dashboard on top and Transactions below.
   Future<GoogleSheetsSyncSummary> syncTransactions(
     List<TransactionEntity> transactions, {
     double? currentBalance,
@@ -1130,86 +1308,18 @@ class GoogleSheetsService {
         );
       }
 
-      // Fetch existing transaction IDs from column G of Transactions sheet
-      final Set<String> existingIds = {};
-      try {
-        final existingValues = await _sheetsApi!.spreadsheets.values.get(
-          sheetId,
-          '$transactionsSheetTitle!A:G',
-        );
-
-        if (existingValues.values != null) {
-          for (final row in existingValues.values!) {
-            if (row.length >= 7 && row[6] != null) {
-              final idStr = row[6].toString().trim();
-              if (idStr.isNotEmpty && idStr != 'Transaction ID') {
-                existingIds.add(idStr);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        developer.log(
-          'Note: Could not query existing sheet rows: $e',
-          name: 'GoogleSheetsService',
-        );
-      }
-
-      // Filter out already synced transactions
-      final toAppend =
-          transactions.where((t) => !existingIds.contains(t.id)).toList();
-
-      if (toAppend.isNotEmpty) {
-        // Format rows chronologically ascending
-        final sorted = List<TransactionEntity>.from(toAppend)
-          ..sort((a, b) => a.date.compareTo(b.date));
-
-        final rows = sorted.map((t) {
-          final dateStr =
-              '${t.date.year}-${t.date.month.toString().padLeft(2, '0')}-${t.date.day.toString().padLeft(2, '0')}';
-          return [
-            dateStr,
-            t.category.displayName,
-            t.amount,
-            t.transactionType,
-            t.merchant,
-            t.note ?? '',
-            t.id,
-          ];
-        }).toList();
-
-        final valueRange = sheets.ValueRange(values: rows);
-
-        await _sheetsApi!.spreadsheets.values.append(
-          valueRange,
-          sheetId,
-          '$transactionsSheetTitle!A1',
-          valueInputOption: 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS',
-        );
-
-        developer.log(
-          'Appended ${rows.length} new transactions to $transactionsSheetTitle sheet in Google Sheet $sheetId.',
-          name: 'GoogleSheetsService',
-        );
-      } else {
-        developer.log(
-          'All ${transactions.length} transactions are already present in Google Sheet.',
-          name: 'GoogleSheetsService',
-        );
-      }
-
-      // Refresh Dashboard with updated balance, active cycle dates, & timestamp
-      await _ensureSheetsAndStructure(
+      await _ensureMonthSheetsStructure(
         sheetId,
+        transactions: transactions,
         currentBalance: currentBalance,
         cycleStartDate: cycleStartDate,
         cycleEndDate: cycleEndDate,
+        syncTime: now,
       );
 
       return GoogleSheetsSyncSummary(
         totalLocalTransactions: transactions.length,
-        newRowsAppended: toAppend.length,
+        newRowsAppended: transactions.length,
         spreadsheetId: sheetId,
         syncTimestamp: now,
       );

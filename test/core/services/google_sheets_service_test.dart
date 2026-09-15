@@ -108,4 +108,103 @@ void main() {
       expect(row[6], equals('txn-abc-123'));
     });
   });
+
+  group('MonthKey & Sheet Tab Tests', () {
+    test('getMonthSheetTitle formats months correctly', () {
+      expect(GoogleSheetsService.getMonthSheetTitle(2026, 9), equals('September 2026'));
+      expect(GoogleSheetsService.getMonthSheetTitle(2026, 8), equals('August 2026'));
+      expect(GoogleSheetsService.getMonthSheetTitle(2026, 1), equals('January 2026'));
+      expect(GoogleSheetsService.getMonthSheetTitle(2026, 12), equals('December 2026'));
+    });
+
+    test('MonthKey sorts in descending order (newest month first)', () {
+      final sept2026 = const MonthKey(2026, 9);
+      final aug2026 = const MonthKey(2026, 8);
+      final dec2025 = const MonthKey(2025, 12);
+      final jan2026 = const MonthKey(2026, 1);
+
+      final list = [dec2025, sept2026, jan2026, aug2026]..sort();
+
+      expect(list, equals([sept2026, aug2026, jan2026, dec2025]));
+      expect(sept2026.title, equals('September 2026'));
+      expect(aug2026.title, equals('August 2026'));
+    });
+
+    test('MonthKey equality and hashCode', () {
+      final key1 = const MonthKey(2026, 9);
+      final key2 = const MonthKey(2026, 9);
+      final key3 = const MonthKey(2026, 8);
+
+      expect(key1, equals(key2));
+      expect(key1.hashCode, equals(key2.hashCode));
+      expect(key1, isNot(equals(key3)));
+    });
+
+    test('getEffectiveMonthKey maps final day of month to the next month', () {
+      // August 31 (salary day) -> September 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 8, 31)),
+        equals(const MonthKey(2026, 9)),
+      );
+
+      // August 30 -> August 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 8, 30)),
+        equals(const MonthKey(2026, 8)),
+      );
+
+      // September 1 -> September 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 9, 1)),
+        equals(const MonthKey(2026, 9)),
+      );
+
+      // September 30 -> October 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 9, 30)),
+        equals(const MonthKey(2026, 10)),
+      );
+
+      // February 28 in non-leap year -> March 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 2, 28)),
+        equals(const MonthKey(2026, 3)),
+      );
+
+      // February 27 -> February 2026
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 2, 27)),
+        equals(const MonthKey(2026, 2)),
+      );
+
+      // February 29 in leap year -> March 2024
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2024, 2, 29)),
+        equals(const MonthKey(2024, 3)),
+      );
+
+      // December 31 -> January of following year
+      expect(
+        GoogleSheetsService.getEffectiveMonthKey(DateTime(2026, 12, 31)),
+        equals(const MonthKey(2027, 1)),
+      );
+    });
+
+    test('getCycleDateRangeForMonth computes salary cycle bounds', () {
+      // September 2026 cycle: Aug 31 to Sept 29
+      final septCycle = GoogleSheetsService.getCycleDateRangeForMonth(const MonthKey(2026, 9));
+      expect(septCycle.start, equals(DateTime(2026, 8, 31)));
+      expect(septCycle.end, equals(DateTime(2026, 9, 29)));
+
+      // August 2026 cycle: Jul 31 to Aug 30
+      final augCycle = GoogleSheetsService.getCycleDateRangeForMonth(const MonthKey(2026, 8));
+      expect(augCycle.start, equals(DateTime(2026, 7, 31)));
+      expect(augCycle.end, equals(DateTime(2026, 8, 30)));
+
+      // January 2026 cycle: Dec 31, 2025 to Jan 30, 2026
+      final janCycle = GoogleSheetsService.getCycleDateRangeForMonth(const MonthKey(2026, 1));
+      expect(janCycle.start, equals(DateTime(2025, 12, 31)));
+      expect(janCycle.end, equals(DateTime(2026, 1, 30)));
+    });
+  });
 }
