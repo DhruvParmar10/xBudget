@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
+import 'package:xbudget/core/database/app_database.dart';
 import 'package:xbudget/features/transactions/data/datasources/transaction_local_datasource.dart';
 import 'package:xbudget/features/transactions/data/models/transaction_model.dart';
 import 'package:xbudget/features/transactions/data/repositories/transaction_repository_impl.dart';
@@ -10,14 +11,23 @@ import 'package:xbudget/features/transactions/domain/repositories/transaction_re
 
 void main() {
   group('TransactionRepository & LocalDataSource Tests', () {
+    late AppDatabase db;
     late TransactionRepository repository;
     late TransactionLocalDataSource localDataSource;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
-      localDataSource = TransactionLocalDataSourceImpl(prefs);
+      db = AppDatabase.inMemory();
+      localDataSource = TransactionLocalDataSourceImpl.fromDb(
+        db: db,
+        prefs: prefs,
+      );
       repository = TransactionRepositoryImpl(localDataSource);
+    });
+
+    tearDown(() async {
+      await db.close();
     });
 
     TransactionEntity createTxn({

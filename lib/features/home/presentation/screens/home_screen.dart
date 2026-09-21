@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xbudget/core/constants/app_preferences.dart';
+import 'package:xbudget/core/database/migration_service.dart';
 import 'package:xbudget/core/di/injection_container.dart';
 import 'package:xbudget/core/theme/app_colors.dart';
 import 'package:xbudget/core/utils/cycle_date_util.dart';
@@ -190,6 +192,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               const Divider(color: AppColors.divider, height: 1),
+              _buildLegacyStorageTile(context),
+              const Divider(color: AppColors.divider, height: 1),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppColors.expense),
                 title: const Text('Reset Storage', style: TextStyle(color: AppColors.expense)),
@@ -206,6 +210,85 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLegacyStorageTile(BuildContext context) {
+    final prefs = sl.isRegistered<SharedPreferences>() ? sl<SharedPreferences>() : null;
+    if (prefs == null) return const SizedBox.shrink();
+
+    final hasBackup = MigrationService.hasLegacyBackup(prefs);
+    final counts = MigrationService.getLegacyBackupCounts(prefs);
+
+    return ListTile(
+      leading: Icon(
+        hasBackup ? Icons.cleaning_services : Icons.storage_rounded,
+        color: hasBackup ? AppColors.caramelOrange : AppColors.income,
+      ),
+      title: const Text(
+        'Legacy Backup Storage',
+        style: TextStyle(color: AppColors.cream),
+      ),
+      subtitle: Text(
+        hasBackup
+            ? 'Legacy backup found (${counts.$1} txns, ${counts.$2} logs). Tap to reclaim storage.'
+            : 'Storage optimized. All data runs on SQLite.',
+        style: const TextStyle(color: AppColors.onSurfaceVariant),
+      ),
+      trailing: hasBackup
+          ? const Icon(Icons.delete_sweep, color: AppColors.caramelOrange)
+          : const Icon(Icons.check_circle_outline, color: AppColors.income),
+      onTap: hasBackup
+          ? () => _showReclaimStorageDialog(context, prefs, counts)
+          : null,
+    );
+  }
+
+  void _showReclaimStorageDialog(
+    BuildContext context,
+    SharedPreferences prefs,
+    (int, int) counts,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text(
+          'Reclaim Legacy Storage',
+          style: TextStyle(color: AppColors.cream, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Your data has been safely migrated to the new SQLite database. '
+          'Reclaiming will permanently remove the legacy SharedPreferences backup '
+          '(${counts.$1} transactions and ${counts.$2} balance logs) to free up storage.\n\n'
+          'Are you sure you want to proceed?',
+          style: const TextStyle(color: AppColors.onSurfaceVariant),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.cream)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.caramelOrange,
+              foregroundColor: AppColors.cream,
+            ),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await MigrationService.reclaimLegacyStorage(prefs);
+              if (!mounted) return;
+              setState(() {});
+              ScaffoldMessenger.of(this.context).showSnackBar(
+                const SnackBar(
+                  content: Text('Legacy storage successfully reclaimed!'),
+                ),
+              );
+            },
+            child: const Text('Reclaim Storage'),
+          ),
+        ],
+      ),
     );
   }
 

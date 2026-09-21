@@ -32,11 +32,16 @@ import 'package:xbudget/features/transactions/domain/usecases/get_total_spend_us
 import 'package:xbudget/features/transactions/domain/usecases/get_transactions_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/manage_category_rules_usecase.dart';
 import 'package:xbudget/features/transactions/domain/usecases/update_transaction_category_usecase.dart';
+import 'package:xbudget/core/database/app_database.dart';
+import 'package:xbudget/core/database/migration_service.dart';
 import 'package:xbudget/features/transactions/presentation/bloc/transaction_bloc.dart';
 
 final sl = GetIt.instance;
 
-Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
+Future<void> initDependencies({
+  SharedPreferences? mockPrefs,
+  AppDatabase? mockDatabase,
+}) async {
   // Clear any existing registrations (useful for tests)
   if (sl.isRegistered<SharedPreferences>()) {
     await sl.reset();
@@ -49,11 +54,18 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
   sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
   sl.registerLazySingleton<AppPreferences>(() => AppPreferences(sl()));
 
+  final appDatabase = mockDatabase ??
+      (mockPrefs != null ? AppDatabase.inMemory() : AppDatabase());
+  sl.registerLazySingleton<AppDatabase>(() => appDatabase);
+
   // ---------------------------------------------------------------------------
   // Data Sources & Repositories
   // ---------------------------------------------------------------------------
   sl.registerLazySingleton<TransactionLocalDataSource>(
-    () => TransactionLocalDataSourceImpl(sl()),
+    () => TransactionLocalDataSourceImpl.fromDb(
+      db: sl(),
+      prefs: sl(),
+    ),
   );
 
   sl.registerLazySingleton<TransactionRepository>(
@@ -61,11 +73,19 @@ Future<void> initDependencies({SharedPreferences? mockPrefs}) async {
   );
 
   sl.registerLazySingleton<BalanceLogLocalDataSource>(
-    () => BalanceLogLocalDataSourceImpl(sl()),
+    () => BalanceLogLocalDataSourceImpl.fromDb(
+      db: sl(),
+    ),
   );
 
   sl.registerLazySingleton<BalanceLogRepository>(
     () => BalanceLogRepositoryImpl(localDataSource: sl()),
+  );
+
+  // Run one-time migration from legacy SharedPreferences if needed
+  await MigrationService.migrateIfNeeded(
+    prefs: sl(),
+    db: sl(),
   );
 
   // ---------------------------------------------------------------------------

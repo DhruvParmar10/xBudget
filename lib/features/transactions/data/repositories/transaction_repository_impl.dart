@@ -18,25 +18,13 @@ class TransactionRepositoryImpl implements TransactionRepository {
     String? query,
     String? transactionType,
   }) async {
-    final models = await _localDataSource.getAllTransactions();
-
-    return models.where((txn) {
-      if (startDate != null && txn.date.isBefore(startDate)) return false;
-      if (endDate != null && txn.date.isAfter(endDate)) return false;
-      if (category != null && txn.category != category) return false;
-      if (transactionType != null &&
-          txn.transactionType.toLowerCase() != transactionType.toLowerCase()) {
-        return false;
-      }
-      if (query != null && query.isNotEmpty) {
-        final q = query.toLowerCase();
-        final matchMerchant = txn.merchant.toLowerCase().contains(q);
-        final matchNote = txn.note?.toLowerCase().contains(q) ?? false;
-        final matchRaw = txn.rawMessage.toLowerCase().contains(q);
-        if (!matchMerchant && !matchNote && !matchRaw) return false;
-      }
-      return true;
-    }).toList();
+    return await _localDataSource.getFilteredTransactions(
+      startDate: startDate,
+      endDate: endDate,
+      category: category,
+      query: query,
+      transactionType: transactionType,
+    );
   }
 
   @override
@@ -71,15 +59,16 @@ class TransactionRepositoryImpl implements TransactionRepository {
     final existing = await _localDataSource.getTransactionById(id);
     if (existing == null) return false;
 
-    final updated = existing.copyWith(
-      category: category,
-      isUserCategorized: isUserCategorized,
-    );
     if (isUserCategorized && existing.merchant.trim().isNotEmpty) {
-      await _localDataSource.saveUserCategoryRule(existing.merchant.trim(), category);
+      await _localDataSource.saveUserCategoryRule(
+        existing.merchant.trim(),
+        category,
+      );
     }
-    return await _localDataSource.updateTransaction(
-      TransactionModel.fromEntity(updated),
+    return await _localDataSource.updateCategory(
+      id,
+      category,
+      isUserCategorized: isUserCategorized,
     );
   }
 
@@ -113,40 +102,31 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Future<double> getTotalSpend({DateTime? startDate, DateTime? endDate}) async {
-    final txns = await getTransactions(
+    return await _localDataSource.getTotalSpend(
       startDate: startDate,
       endDate: endDate,
-      transactionType: 'expense',
     );
-    return txns.fold<double>(0.0, (sum, txn) => sum + txn.amount);
   }
 
   @override
-  Future<double> getTotalIncome({DateTime? startDate, DateTime? endDate}) async {
-    final txns = await getTransactions(
+  Future<double> getTotalIncome({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    return await _localDataSource.getTotalIncome(
       startDate: startDate,
       endDate: endDate,
-      transactionType: 'income',
     );
-    return txns.fold<double>(0.0, (sum, txn) => sum + txn.amount);
   }
-
 
   @override
   Future<Map<BudgetCategory, double>> getSpendByCategory({
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    final txns = await getTransactions(
+    return await _localDataSource.getSpendByCategory(
       startDate: startDate,
       endDate: endDate,
-      transactionType: 'expense',
     );
-
-    final Map<BudgetCategory, double> breakdown = {};
-    for (final txn in txns) {
-      breakdown[txn.category] = (breakdown[txn.category] ?? 0.0) + txn.amount;
-    }
-    return breakdown;
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xbudget/core/database/app_database.dart';
 import 'package:xbudget/features/balance/data/datasources/balance_log_local_datasource.dart';
 import 'package:xbudget/features/balance/data/models/balance_log_model.dart';
 import 'package:xbudget/features/balance/data/repositories/balance_log_repository_impl.dart';
@@ -7,14 +8,19 @@ import 'package:xbudget/features/balance/domain/entities/balance_log_entity.dart
 import 'package:xbudget/features/balance/domain/repositories/balance_log_repository.dart';
 
 void main() {
+  late AppDatabase db;
   late BalanceLogLocalDataSource dataSource;
   late BalanceLogRepository repository;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    dataSource = BalanceLogLocalDataSourceImpl(prefs);
+    db = AppDatabase.inMemory();
+    dataSource = BalanceLogLocalDataSourceImpl.fromDb(db: db);
     repository = BalanceLogRepositoryImpl(localDataSource: dataSource);
+  });
+
+  tearDown(() async {
+    await db.close();
   });
 
   group('BalanceLogRepository & LocalDataSource', () {

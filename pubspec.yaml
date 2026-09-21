@@ -45,11 +45,17 @@ dependencies:
   googleapis: ^13.2.0
   extension_google_sign_in_as_googleapis_auth: ^2.0.12
   http: ^1.2.1
+  drift: ^2.24.0
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.5
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   bloc_test: ^10.0.0
+  drift_dev: ^2.24.0
+  build_runner: ^2.4.13
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
